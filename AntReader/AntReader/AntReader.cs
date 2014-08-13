@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 using Illumina.AntTools.Model;
 
+
 namespace Illumina.AntTools
 {
     public class AntReader
@@ -91,6 +92,9 @@ namespace Illumina.AntTools
                     {
                         if (Chromosome.IsLessThan(currentIndex.Chromosome, range.Chromosome))
                         {
+                            if (indicesIndex == indices.Length - 1)
+                                continue;
+
                             AntIndex nextIndex = indices[indicesIndex + 1];
 
                             if (Chromosome.IsLessThan(nextIndex.Chromosome, range.Chromosome))

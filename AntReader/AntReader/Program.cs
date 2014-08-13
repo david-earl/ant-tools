@@ -4,7 +4,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+
+using Mono.Options;
+using ServiceStack.Text;
 
 using Illumina.AntTools.Model;
 
@@ -14,16 +18,38 @@ namespace Illumina.AntTools
     {
         static void Main(string[] args)
         {
-            if (args.Length != 1)
+            if (args.Length < 1)
             {
                 Console.WriteLine("usage:");
 
-                Console.WriteLine("AnnotationWriter [antFileName]\n\r");
+                Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
 
                 Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
 
+                Console.WriteLine("\n\rOptions:");
+
+                Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
+
+                Console.WriteLine("\t--stats: provides a summary of annotation version, contents, etc.");
+
+                Console.WriteLine("\t--range RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
+
+                Console.WriteLine("\t--bed: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
+
                 return;
             }
+
+            bool doValidate = false;
+            bool doGenerateStats = false;
+            ChrRange range = null;
+            bool isBedOutput = false;
+
+            OptionSet options = new OptionSet()
+                .Add("validate", dontCare => doValidate = true)
+                .Add("stats", dontCare => doGenerateStats = true)
+                .Add("range:", chrRange => range = ParseChrRange(chrRange));
+
+            options.Parse(args);
 
             string antPath = args[0];
 
@@ -43,82 +69,43 @@ namespace Illumina.AntTools
 
             string indexPath = String.Format("{0}.idx", antPath);
 
-            Console.Write("Parsing .ant file: ");
-
-            int cursorRow = Console.CursorTop;
-            int cursorColumn = Console.CursorLeft;
-
-            int collectionId;
-
             AntReader reader = new AntReader();
-
-            int count = 0;
-            int badCount = 0;
 
             Stopwatch sw = new Stopwatch();
 
             sw.Start();
 
-            ChrRange range = new ChrRange() { Chromosome = "chr1", StartPosition = 10000000, StopPosition = 20000000 };
+            int collectionId;
+            int count = 0;
 
             foreach (AnnotationResult record in reader.Load(antPath, out collectionId, range))
             {
-                if (record.Annotation.Any())
-                    count++;
-                else
-                    badCount++;
+                if (!record.Annotation.Any())
+                    continue;
+
+                count++;
+
+                Console.WriteLine(record.ToJson());
             }
 
             sw.Stop();
-
-            Console.WriteLine("\n\rexecution finished.");
         }
 
-
-        public static void WriteDelimitedResults(string path, IEnumerable<AnnotationResult> results, string delimiterFormat)
+        private static ChrRange ParseChrRange(string chrRange)
         {
-            char delimiter = ',';
+            Regex regex = new Regex(@"(.*):(\d+)-(\d+)");
 
-            if (delimiterFormat.Equals("csv"))
-                delimiter = ',';
-            else if (delimiterFormat.Equals("tsv"))
-                delimiter = '\t';
+            Match matches = regex.Match(chrRange);
 
-            try
+            if (matches.Groups.Count != 4)
+                throw new Exception("Chromosome range was in an incorrect format.");
+
+            return new ChrRange()
             {
-                using (System.IO.StreamWriter file = new System.IO.StreamWriter(path))
-                {
-                    foreach (AnnotationResult result in results.Where(p => p.Annotation != null && p.Annotation.Any()))
-                    {
-                        file.WriteLine(String.Format("{0}{1}{2}{3}{4}{5}{6}",
-                            result.Variant.Chromosome, delimiter,
-                            result.Variant.Position, delimiter,
-                            result.Variant.ReferenceAllele, delimiter,
-                            result.Variant.VariantAlleles));
-
-
-                        foreach (var group in result.Annotation)
-                        {
-                            file.WriteLine(String.Format("\n{0}{1}", delimiter, group.Key));
-
-                            foreach (var entry in group.Value)
-                            {
-                                file.WriteLine("{0}{1}{2}", delimiter, delimiter, entry.Key);
-
-                                foreach (var annotation in entry.Value)
-                                {
-                                    file.WriteLine("{0}{1}{2}{3}{4}{5}", delimiter, delimiter, delimiter, annotation.Key, delimiter, annotation.Value);
-                                }
-                            }
-                        }
-                        file.WriteLine("");
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Error writing output file: " + e.Message);
-            }
+                Chromosome = matches.Groups[1].Value,
+                StartPosition = Convert.ToInt64(matches.Groups[2].Value),
+                StopPosition = Convert.ToInt64(matches.Groups[3].Value)
+            };
         }
     }
 }
