@@ -59,7 +59,7 @@ namespace Illumina.AntTools
 
             sw.Start();
 
-            ChrRange range = null;// new ChrRange() { Chromosome = "chr1", StartPosition = 10000000, StopPosition = 20000000 };
+            ChrRange range = new ChrRange() { Chromosome = "chr1", StartPosition = 10000000, StopPosition = 20000000 };
 
             foreach (AnnotationResult record in reader.Load(antPath, out collectionId, range))
             {

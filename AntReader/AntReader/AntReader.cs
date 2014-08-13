@@ -13,18 +13,12 @@ namespace Illumina.AntTools
 {
     public class AntReader
     {
-
         private BlockingCollection<AnnotationResult> _annotation;
 
         private ConcurrentQueue<Tuple<int, byte[], ChrRange>> _chunks;
         private bool _isCancelled = false;
         private bool _isReadingChunks = true;
         private int _chunkFinishedCount = 0;
-
-        //private List<string> Chromosomes
-        //{
-        //    get { return Chromosome.ChrsByTranscriptSource[TranscriptSource]; }
-        //}
 
         public readonly byte _antFormatNumber = 3;
 
@@ -40,6 +34,7 @@ namespace Illumina.AntTools
         {
 
         }
+
 
         public IEnumerable<AnnotationResult> Load(string filepath, out int annotationCollectionId, ChrRange range = null)
         {
@@ -85,9 +80,6 @@ namespace Illumina.AntTools
 
             }
 
-            //int indicesIndex = 0;
-            //int currentChrIndex = 0;
-
             using (FileStream stream = File.Open(filePath, FileMode.Open))
             using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
             {
@@ -124,20 +116,11 @@ namespace Illumina.AntTools
                                 if (nextIndex.ChrPosition <= range.StartPosition)
                                     continue;
                             }
-
-                            if (currentIndex.ChrPosition > range.StartPosition)
+                            else if (currentIndex.ChrPosition > range.StopPosition)
                             {
+                                // TODO: at this point we should be able to safely break the loop
 
-                                //// it's possible that the previous index's chromosome didn't match, but the chromosome we're looking for *does* exist towards the end of the previous index's chunk
-                                
-                                //AntIndex previousIndex = indices[indicesIndex - 1];
-
-                                //if (Chromosome.IsLessThan(previousIndex.Chromosome, range.Chromosome))
-                                //{
-                                //    reader.BaseStream.Position = previousIndex.FilePosition;
-
-                                //    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(indicesIndex - 1, ReadChunk(reader), range));
-                                //}
+                                continue;
                             }
                         }
                     }
@@ -148,134 +131,9 @@ namespace Illumina.AntTools
                 }
 
                 _isReadingChunks = false;
-
-                    //currentChrIndex = Chromosomes.IndexOf(range.Chromosome);
-
-                    //bool isSeeking = true;
-                    //// seek until we find the first AntIndex matching our chr
-                    //while (isSeeking)
-                    //{
-                    //    if (indices[indicesIndex].Chromosome == range.Chromosome)
-
-                    //    string nextAntIndexChr = indices[indicesIndex + 1].Chromosome;
-
-                    //    if (nextAntIndexChr == range.Chromosome) // the next AntIndex matches our current chr...go with it.
-                    //    {
-                    //        indicesIndex++;
-
-                    //        break;
-                    //    }
-                    //    else if (Chromosomes.IndexOf(nextAntIndexChr) > currentChrIndex) // the next AntIndex has gone past our current chr...look inside the current AntIndex chunk
-                    //        break;
-                    //}
-
             }
         }
 
-        //private List<AnnotationResult>[] LoadFromIndexedBinaryFile(string filepath, int[] indices, out int annotationCollectionId, Func<double, bool> progressCallback, bool[] indexMask = null)
-        //{
-
-        //    if (!File.Exists(filepath))
-        //        throw new ArgumentException(String.Format("The specified file ({0}) does not exist.", filepath));
-
-        //    long[] indexedFilePositions = ParseAntIndex(filepath + ".idx").Select(p => p.FilePosition).ToArray();
-
-        //    // if no indices given, default to all of them
-        //    if (indexedFilePositions.Length > 0 && indices == null)
-        //    {
-        //        indices = new int[indexedFilePositions.Length];
-
-        //        for (int i = 0; i < indexedFilePositions.Length; i++)
-        //        {
-        //            indices[i] = i;
-        //        }
-        //    }
-
-        //    ConcurrentDictionary<int, List<AnnotationResult>> annotation = new ConcurrentDictionary<int, List<AnnotationResult>>();
-
-        //    try
-        //    {
-        //        List<Thread> workerThreads;
-        //        _chunks = new ConcurrentQueue<Tuple<int, byte[]>>();
-        //        _isReadingChunks = true;
-        //        _isCancelled = false;
-
-        //        using (FileStream stream = File.Open(filepath, FileMode.Open))
-        //        using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
-        //        {
-
-        //            annotationCollectionId = ParseAntHeader(header, filepath);
-
-        //            workerThreads = new List<Thread>();
-        //            for (int threadCount = 0; threadCount < Environment.ProcessorCount + 1; threadCount++)
-        //            {
-        //                Thread thread = new Thread(() => AntChunkWorker(annotation, indexMask);
-
-        //                workerThreads.Add(thread);
-
-        //                thread.Name = String.Format("ANT_chunk_worker_{0}", threadCount + 1);
-        //                thread.IsBackground = true;
-
-        //                thread.Start();
-        //            }
-
-        //            _chunkFinishedCount = 0;
-
-        //            if (indexedFilePositions.Length == 0 || indices == null)
-        //                ParseAntChunksWithoutIndex(reader);
-        //            else
-        //                ParseAntChunksWithIndex(reader, indexedFilePositions, indices);
-
-
-        //            _isReadingChunks = false;
-
-        //            foreach (Thread workerThread in workerThreads)
-        //            {
-        //                workerThread.Join();
-        //            }
-        //        }
-
-        //        if (progressCallback != null)
-        //            progressCallback(1.0);
-        //    }
-        //    catch (Exception)
-        //    {
-        //        throw;
-        //    }
-
-        //    _chunks = null;
-
-        //    if (_isCancelled)
-        //    {
-        //        annotation = null;
-        //    }
-
-        //    return annotation.OrderBy(p => p.Key).Select(p => p.Value).ToArray();
-        //}
-
-        //private void ParseAntChunksWithoutIndex(BinaryReader reader)
-        //{
-        //    int chunkCounter = 0;
-
-        //    while (reader.BaseStream.Position < reader.BaseStream.Length)
-        //    {
-        //        byte[] data = ReadChunk(reader);
-
-        //        _chunks.Enqueue(new Tuple<int, byte[]>(chunkCounter++, data));
-        //    }
-        //}
-
-        //private void ParseAntChunksWithIndex(BinaryReader reader, long[] indexedFilePositions, int[] indices)
-        //{
-        //    for (int i = 0; i < indices.Length; i++)
-        //    {
-        //        reader.BaseStream.Position = indexedFilePositions[indices[i]];
-
-        //        byte[] data = ReadChunk(reader);
-
-        //        _chunks.Enqueue(new Tuple<int, byte[]>(i, data));
-        //    }
-        //}
 
         private byte[] ReadChunk(BinaryReader reader)
         {
