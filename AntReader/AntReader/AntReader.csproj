@@ -55,6 +55,7 @@
     <Compile Include="Model\AntIndex.cs" />
     <Compile Include="Model\Chromosome.cs" />
     <Compile Include="Model\ChrRange.cs" />
+    <Compile Include="Model\Stats.cs" />
     <Compile Include="Model\TranscriptSource.cs" />
     <Compile Include="Model\Variant.cs" />
     <Compile Include="Mono.Options\Options.cs" />

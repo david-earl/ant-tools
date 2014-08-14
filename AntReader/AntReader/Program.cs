@@ -67,9 +67,14 @@ namespace Illumina.AntTools
                 return;
             }
 
-            string indexPath = String.Format("{0}.idx", antPath);
+            AntReader reader = new AntReader(antPath);
 
-            AntReader reader = new AntReader();
+            if (doGenerateStats)
+            {
+                reader.PrintAntStats();
+
+                return;
+            }
 
             Stopwatch sw = new Stopwatch();
 
@@ -78,7 +83,7 @@ namespace Illumina.AntTools
             int collectionId;
             int count = 0;
 
-            foreach (AnnotationResult record in reader.Load(antPath, out collectionId, range))
+            foreach (AnnotationResult record in reader.Load(out collectionId, range))
             {
                 if (!record.Annotation.Any())
                     continue;
