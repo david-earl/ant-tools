@@ -26,23 +26,28 @@ namespace Illumina.AntTools
 
         private BlockingCollection<AnnotationResult> _annotation;
 
+        private AntIndex[] _indices = null;
         private ConcurrentQueue<Tuple<int, byte[], ChrRange>> _chunks;
+        private Stats _antStats;
+        private object _statsLock = new object();
         private bool _isCancelled = false;
         private bool _isReadingChunks = true;
         private int _chunkFinishedCount = 0;
 
         public readonly byte _antFormatNumber = 3;
 
-        private readonly int _numWorkerThreads = 1;
+        private readonly int _numWorkerThreads = 8;
 
         private readonly string _antPath;
+
 
         public string AntVersion
         {
             get { return String.Format("ANT{0}", _antFormatNumber); }
         }
 
-        private Stats _antStats;
+        public Action<double> ProgressCallback { get; set; }
+
 
         public AntReader(string filepath)
         {
@@ -52,58 +57,57 @@ namespace Illumina.AntTools
 
         public IEnumerable<AnnotationResult> Load(out int annotationCollectionId, ChrRange range = null)
         {
-            _chunks = new ConcurrentQueue<Tuple<int, byte[], ChrRange>>();
-            _annotation = new BlockingCollection<AnnotationResult>();
-
-            annotationCollectionId = ParseAntHeader(_antPath);
-
-            Thread producerThread = new Thread(() => Producer(range));
-            producerThread.Name = "ANT Producer Thread";
-            producerThread.Start();
-
-            for (int threadCount = 0; threadCount < _numWorkerThreads; threadCount++)
-            {
-                Thread thread = new Thread(() => AntChunkWorker(false));
-
-                thread.Name = String.Format("ANT_chunk_worker_{0}", threadCount + 1);
-                thread.IsBackground = true;
-
-                thread.Start();
-            }
+            annotationCollectionId = Init(range);
 
             return _annotation.GetConsumingEnumerable();
         }
 
+
+        public bool Validate()
+        {
+            Console.Write("Validating ANT file...");
+
+            try
+            {
+                Init(null, true, false);
+
+                Console.WriteLine("valid.");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("invalid: {0}.", e.Message);
+
+                return false;
+            }
+
+            return true;
+        }
+
         public void PrintAntStats()
         {
-            _chunks = new ConcurrentQueue<Tuple<int, byte[], ChrRange>>();
-            _annotation = new BlockingCollection<AnnotationResult>();
-
-            int annotationCollectionId = ParseAntHeader(_antPath);
+            int annotationCollectionId = Init(null, false, true);
 
             Tuple<string, TranscriptSource> dataInfo = _datasetInfoByAnnotationCollectionId.ContainsKey(annotationCollectionId) ? _datasetInfoByAnnotationCollectionId[annotationCollectionId] : new Tuple<string, TranscriptSource>("unknown", TranscriptSource.RefSeq);
 
             _antStats = new Stats() { DatasetVersion = dataInfo.Item1, TranscriptSource = dataInfo.Item2, Ranges = new List<ChrRange>() };
 
-            Thread producerThread = new Thread(() => Producer(null));
-            producerThread.Name = "ANT Producer Thread";
-            producerThread.Start();
+            Console.Write("Generating ANT stats...");
 
-            Thread thread = new Thread(() => AntChunkWorker(true));
+            int cursorRow = Console.CursorTop;
+            int cursorColumn = Console.CursorLeft;
 
-            thread.Name = "ANT_chunk_worker";
-            thread.IsBackground = true;
-
-            thread.Start();
-
-            Console.WriteLine("Generating ANT stats...\n\r");
+            ProgressCallback = (progress) =>
+            {
+                Console.SetCursorPosition(cursorColumn, cursorRow);
+                Console.Write("{0}%", (progress*100).ToString("0.00"));
+            }; 
 
             foreach (var dontCare in _annotation.GetConsumingEnumerable())
             {
                 // wait for processing to complete
             }
 
-            Console.WriteLine("ANT stats:");
+            Console.WriteLine("\n\rANT stats:");
             Console.WriteLine("\tDataset Version: {0}", _antStats.DatasetVersion);
             Console.WriteLine("\tTranscriptSource: {0}", _antStats.TranscriptSource);
             Console.WriteLine("\t# Annotated Variants: {0}", _antStats.VariantCount);
@@ -112,151 +116,6 @@ namespace Illumina.AntTools
             foreach(ChrRange range in _antStats.Ranges)
             {
                 Console.WriteLine("\t\t{0}:{1}-{2}", range.Chromosome, range.StartPosition, range.StopPosition);
-            }
-        }
-
-
-        private void Producer(ChrRange range)
-        {
-            _isReadingChunks = true;
-
-            string indexFilePath = String.Format("{0}.idx", _antPath);
-
-            if (!File.Exists(indexFilePath))
-                throw new Exception("Can't find index file.");
-
-            AntIndex[] indices = ParseAntIndex(indexFilePath);
-
-            // if the user doesn't specify any indexing, default to everything
-            if (range == null)
-            {
-
-            }
-
-            using (FileStream stream = File.Open(_antPath, FileMode.Open))
-            using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
-            {
-                for (int indicesIndex = 0; indicesIndex < indices.Length; indicesIndex++)
-                {
-                    AntIndex currentIndex = indices[indicesIndex];
-
-                    if (range != null)
-                    {
-                        if (Chromosome.IsLessThan(currentIndex.Chromosome, range.Chromosome))
-                        {
-                            if (indicesIndex == indices.Length - 1)
-                                continue;
-
-                            AntIndex nextIndex = indices[indicesIndex + 1];
-
-                            if (Chromosome.IsLessThan(nextIndex.Chromosome, range.Chromosome))
-                                continue;
-                        }
-                        else if (Chromosome.IsGreaterThan(currentIndex.Chromosome, range.Chromosome))
-                        {
-                            AntIndex previousIndex = indices[indicesIndex - 1];
-
-                            if (!Chromosome.IsLessThan(previousIndex.Chromosome, range.Chromosome))
-                                break;
-
-                            // at this point, we know we don't have an index entry matching our chr...
-                            // it's still possible that there is annotation that falls between index records, so go back and read the annotation pointed at by the previous index
-                            currentIndex = previousIndex;
-                        }
-                        else if (currentIndex.Chromosome == range.Chromosome)
-                        {
-                            if (currentIndex.ChrPosition < range.StartPosition)
-                            {
-                                AntIndex nextIndex = indices[indicesIndex + 1];
-
-                                if (nextIndex.ChrPosition <= range.StartPosition)
-                                    continue;
-                            }
-                            else if (currentIndex.ChrPosition > range.StopPosition)
-                            {
-                                // TODO: at this point we should be able to safely break the loop
-
-                                continue;
-                            }
-                        }
-                    }
-
-                    reader.BaseStream.Position = currentIndex.FilePosition;
-
-                    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(indicesIndex, ReadChunk(reader), range));
-                }
-
-                _isReadingChunks = false;
-            }
-        }
-
-
-        private byte[] ReadChunk(BinaryReader reader)
-        {
-            int chunkLength = reader.ReadInt32();
-
-            byte[] buffer = new byte[chunkLength];
-
-            if (reader.Read(buffer, 0, chunkLength) != chunkLength)
-                throw new FileLoadException("An error occurred while parsing the file.");
-
-            byte[] copy = new byte[chunkLength];
-            Buffer.BlockCopy(buffer, 0, copy, 0, chunkLength);
-
-            return copy;
-        }
-
-        private void AntChunkWorker(bool isStatsLoad = false)
-        {
-            int chunkIndex = -1;
-            byte[] buffer = null;
-            ChrRange range = null;
-
-            try
-            {
-                while (_isReadingChunks || _chunks.Any())
-                {
-                    if (!_chunks.Any())
-                    {
-                        Thread.Sleep(100);
-
-                        continue;
-                    }
-
-                    Tuple<int, byte[], ChrRange> chunk;
-
-                    _chunks.TryDequeue(out chunk);
-
-                    if (chunk.Item2 == null)
-                        continue;
-
-                    chunkIndex = chunk.Item1;
-                    buffer = chunk.Item2;
-                    range = chunk.Item3;
-
-                    List<AnnotationResult> results = buffer.DeserializeFromBinary(variant => VariantPredicate(variant, range, isStatsLoad)).ToList();
-
-                    if (!isStatsLoad)
-                    {
-                        foreach (AnnotationResult record in results)
-                        {
-                            _annotation.Add(record);
-                        }
-                    }
-
-                    Interlocked.Increment(ref _chunkFinishedCount);
-                }
-
-                _annotation.CompleteAdding();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Thread exception: {0}", e.Message);
-
-                // bail on this thread and let one of the others pick it up
-
-                if (buffer != null && _chunks != null && chunkIndex > 0)
-                    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(chunkIndex, buffer, range));
             }
         }
 
@@ -290,26 +149,203 @@ namespace Illumina.AntTools
             return indices.ToArray();
         }
 
-        private bool VariantPredicate(Variant variant, ChrRange range, bool isStatsLoad)
+
+        private int Init(ChrRange range = null, bool isValidating = false, bool isStats = false)
         {
-            if (isStatsLoad)
+            _chunks = new ConcurrentQueue<Tuple<int, byte[], ChrRange>>();
+            _annotation = new BlockingCollection<AnnotationResult>();
+
+            int annotationCollectionId = ParseAntHeader(_antPath);
+
+            Thread producerThread = new Thread(() => Producer(range));
+            producerThread.Name = "ANT Producer Thread";
+            producerThread.Start();
+
+            for (int threadCount = 0; threadCount < _numWorkerThreads; threadCount++)
             {
-                _antStats.VariantCount++;
+                Thread thread = new Thread(() => AntChunkWorker(isStats, isValidating));
 
-                ChrRange chrRange = _antStats.Ranges.SingleOrDefault(p => p.Chromosome == variant.Chromosome);
+                thread.Name = String.Format("ANT_chunk_worker_{0}", threadCount + 1);
+                thread.IsBackground = true;
 
-                if (chrRange == null)
+                thread.Start();
+            }
+
+            return annotationCollectionId;
+        }
+
+        private void Producer(ChrRange range)
+        {
+            _isReadingChunks = true;
+
+            string indexFilePath = String.Format("{0}.idx", _antPath);
+
+            if (!File.Exists(indexFilePath))
+                throw new Exception("Can't find index file.");
+
+            _indices = ParseAntIndex(indexFilePath);
+
+            // if the user doesn't specify any indexing, default to everything
+            if (range == null)
+            {
+
+            }
+
+            using (FileStream stream = File.Open(_antPath, FileMode.Open))
+            using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
+            {
+                for (int indicesIndex = 0; indicesIndex < _indices.Length; indicesIndex++)
                 {
-                    chrRange = new ChrRange() { Chromosome = variant.Chromosome, StartPosition = variant.Position };
-                    _antStats.Ranges.Add(chrRange);
+                    AntIndex currentIndex = _indices[indicesIndex];
 
-                    // guess the transcript source, if necessary
-                    if (_antStats.DatasetVersion == "unknown")
-                        _antStats.TranscriptSource = variant.Chromosome.StartsWith("chr") ? TranscriptSource.RefSeq : TranscriptSource.Ensembl;
+                    if (range != null)
+                    {
+                        if (Chromosome.IsLessThan(currentIndex.Chromosome, range.Chromosome))
+                        {
+                            if (indicesIndex == _indices.Length - 1)
+                                continue;
+
+                            AntIndex nextIndex = _indices[indicesIndex + 1];
+
+                            if (Chromosome.IsLessThan(nextIndex.Chromosome, range.Chromosome))
+                                continue;
+                        }
+                        else if (Chromosome.IsGreaterThan(currentIndex.Chromosome, range.Chromosome))
+                        {
+                            AntIndex previousIndex = _indices[indicesIndex - 1];
+
+                            if (!Chromosome.IsLessThan(previousIndex.Chromosome, range.Chromosome))
+                                break;
+
+                            // at this point, we know we don't have an index entry matching our chr...
+                            // it's still possible that there is annotation that falls between index records, so go back and read the annotation pointed at by the previous index
+                            currentIndex = previousIndex;
+                        }
+                        else if (currentIndex.Chromosome == range.Chromosome)
+                        {
+                            if (currentIndex.ChrPosition < range.StartPosition)
+                            {
+                                AntIndex nextIndex = _indices[indicesIndex + 1];
+
+                                if (nextIndex.ChrPosition <= range.StartPosition)
+                                    continue;
+                            }
+                            else if (currentIndex.ChrPosition > range.StopPosition)
+                            {
+                                // TODO: at this point we should be able to safely break the loop
+
+                                continue;
+                            }
+                        }
+                    }
+
+                    reader.BaseStream.Position = currentIndex.FilePosition;
+
+                    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(indicesIndex, ReadChunk(reader), range));
                 }
 
-                // assume .ant is ordered
-                chrRange.StopPosition = variant.Position;
+                _isReadingChunks = false;
+            }
+        }
+
+        private byte[] ReadChunk(BinaryReader reader)
+        {
+            int chunkLength = reader.ReadInt32();
+
+            byte[] buffer = new byte[chunkLength];
+
+            if (reader.Read(buffer, 0, chunkLength) != chunkLength)
+                throw new FileLoadException("An error occurred while parsing the file.");
+
+            byte[] copy = new byte[chunkLength];
+            Buffer.BlockCopy(buffer, 0, copy, 0, chunkLength);
+
+            return copy;
+        }
+
+        private void AntChunkWorker(bool isStatsLoad = false, bool isValidating = false)
+        {
+            int chunkIndex = -1;
+            byte[] buffer = null;
+            ChrRange range = null;
+
+            try
+            {
+                while (_isReadingChunks || _chunks.Any())
+                {
+                    if (!_chunks.Any())
+                    {
+                        Thread.Sleep(100);
+
+                        continue;
+                    }
+
+                    if (ProgressCallback != null && Thread.CurrentThread.Name.Equals("ANT_chunk_worker_1"))
+                        ProgressCallback(1.0 - ((double) _chunks.Count() / _indices.Length));
+
+                    Tuple<int, byte[], ChrRange> chunk;
+
+                    _chunks.TryDequeue(out chunk);
+
+                    if (chunk.Item2 == null)
+                        continue;
+
+                    chunkIndex = chunk.Item1;
+                    buffer = chunk.Item2;
+                    range = chunk.Item3;
+
+                    List<AnnotationResult> results = buffer.DeserializeFromBinary(variant => VariantPredicate(variant, range, isStatsLoad, isValidating)).ToList();
+
+                    if (!isStatsLoad)
+                    {
+                        foreach (AnnotationResult record in results)
+                        {
+                            _annotation.Add(record);
+                        }
+                    }
+
+                    Interlocked.Increment(ref _chunkFinishedCount);
+                }
+
+                _annotation.CompleteAdding();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Thread exception: {0}", e.Message);
+
+                // bail on this thread and let one of the others pick it up
+
+                if (buffer != null && _chunks != null && chunkIndex > 0)
+                    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(chunkIndex, buffer, range));
+            }
+        }
+
+        private bool VariantPredicate(Variant variant, ChrRange range, bool isStatsLoad, bool isValidating)
+        {
+            if (isValidating)
+                return false;
+
+            if (isStatsLoad)
+            {
+                lock (_statsLock)
+                {
+                    _antStats.VariantCount++;
+
+                    ChrRange chrRange = _antStats.Ranges.SingleOrDefault(p => p.Chromosome == variant.Chromosome);
+
+                    if (chrRange == null)
+                    {
+                        chrRange = new ChrRange() { Chromosome = variant.Chromosome, StartPosition = variant.Position };
+                        _antStats.Ranges.Add(chrRange);
+
+                        // guess the transcript source, if necessary
+                        if (_antStats.DatasetVersion == "unknown")
+                            _antStats.TranscriptSource = variant.Chromosome.StartsWith("chr") ? TranscriptSource.RefSeq : TranscriptSource.Ensembl;
+                    }
+
+                    // assume .ant is ordered
+                    chrRange.StopPosition = variant.Position;
+                }
 
                 return false;
             }

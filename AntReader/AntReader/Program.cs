@@ -69,6 +69,13 @@ namespace Illumina.AntTools
 
             AntReader reader = new AntReader(antPath);
 
+            if (doValidate)
+            {
+                reader.Validate();
+
+                return;
+            }
+
             if (doGenerateStats)
             {
                 reader.PrintAntStats();
