@@ -1,13 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 using Mono.Options;
+
 using ServiceStack.Text;
 
 using Illumina.AntTools.Model;
@@ -20,21 +18,7 @@ namespace Illumina.AntTools
         {
             if (args.Length < 1)
             {
-                Console.WriteLine("usage:");
-
-                Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
-
-                Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
-
-                Console.WriteLine("\n\rOptions:");
-
-                Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
-
-                Console.WriteLine("\t--stats: provides a summary of annotation version, contents, etc.");
-
-                Console.WriteLine("\t--range RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
-
-                Console.WriteLine("\t--bed: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
+                PrintUsage();
 
                 return;
             }
@@ -56,6 +40,8 @@ namespace Illumina.AntTools
             if (String.IsNullOrEmpty(antPath))
             {
                 Console.WriteLine("Invalid arguments.");
+
+                PrintUsage();
 
                 return;
             }
@@ -101,6 +87,25 @@ namespace Illumina.AntTools
             }
 
             sw.Stop();
+        }
+
+        private static void PrintUsage()
+        {
+            Console.WriteLine("usage:");
+
+            Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
+
+            Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
+
+            Console.WriteLine("\n\rOptions:");
+
+            Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
+
+            Console.WriteLine("\t--stats: provides a summary of annotation version, contents, etc.");
+
+            Console.WriteLine("\t--range RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
+
+            Console.WriteLine("\t--bed: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
         }
 
         private static ChrRange ParseChrRange(string chrRange)
