@@ -31,7 +31,13 @@ namespace Illumina.AntTools
             OptionSet options = new OptionSet()
                 .Add("validate", dontCare => doValidate = true)
                 .Add("stats", dontCare => doGenerateStats = true)
-                .Add("range:", chrRange => range = ParseChrRange(chrRange));
+                .Add("range=", chrRange =>
+                {
+                    if (String.IsNullOrEmpty(chrRange))
+                        throw new ArgumentException("Invalid range value given.");
+
+                    range = ParseChrRange(chrRange);
+                });
 
             options.Parse(args);
 
@@ -92,7 +98,7 @@ namespace Illumina.AntTools
         private static void PrintUsage()
         {
             Console.WriteLine("usage:");
-
+            
             Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
 
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");

@@ -286,8 +286,8 @@ namespace Illumina.AntTools
                     Tuple<int, byte[], ChrRange> chunk;
 
                     _chunks.TryDequeue(out chunk);
-
-                    if (chunk.Item2 == null)
+                    
+                    if (chunk == null || chunk.Item2 == null)
                         continue;
 
                     chunkIndex = chunk.Item1;
