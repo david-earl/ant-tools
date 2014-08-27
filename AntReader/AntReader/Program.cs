@@ -86,13 +86,15 @@ namespace Illumina.AntTools
 
             foreach (AnnotationResult record in reader.Load(out collectionId, range))
             {
+                recordCount++;
+
                 if (!record.Annotation.Any())
                     continue;
 
-                Console.WriteLine(record.ToJson());
-
-                if (limit > 0 && recordCount++ >= limit)
+                if (limit > 0 && recordCount >= limit)
                     break;
+
+                Console.WriteLine(record.ToJson());
             }
 
             if (recordCount == 0)

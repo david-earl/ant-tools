@@ -24,7 +24,6 @@ namespace Illumina.AntTools
             {8, new Tuple<string, TranscriptSource>("75.2", TranscriptSource.RefSeq) },
         };
 
-        private object _tempResultsLock = new object();
         private List<AnnotationResult>[] _tempResults;
         private BlockingCollection<AnnotationResult> _annotation;
 
@@ -33,12 +32,13 @@ namespace Illumina.AntTools
         private Stats _antStats;
         private object _statsLock = new object();
         private bool _isCancelled = false;
-        private bool _isReadingChunks = true;
+        private bool _isProducingChunks = true;
         private int _chunkFinishedCount = 0;
 
         public readonly byte _antFormatNumber = 3;
 
-        private readonly int _numWorkerThreads = Environment.ProcessorCount;
+        private static readonly int _numWorkerThreads = Environment.ProcessorCount;
+        private List<Thread> _workerThreads = new List<Thread>(_numWorkerThreads); 
 
         private readonly string _antPath;
 
@@ -165,12 +165,14 @@ namespace Illumina.AntTools
 
             for (int threadCount = 0; threadCount < _numWorkerThreads; threadCount++)
             {
-                Thread thread = new Thread(() => AntChunkWorker(isStats, isValidating));
+                Thread workerThread = new Thread(() => AntChunkWorker(isStats, isValidating));
 
-                thread.Name = String.Format("ANT_chunk_worker_{0}", threadCount + 1);
-                thread.IsBackground = true;
+                workerThread.Name = String.Format("ANT_chunk_worker_{0}", threadCount + 1);
+                workerThread.IsBackground = true;
 
-                thread.Start();
+                _workerThreads.Add(workerThread);
+
+                workerThread.Start();
             }
 
             Thread yieldThread = new Thread(YieldWorker);
@@ -182,7 +184,7 @@ namespace Illumina.AntTools
 
         private void Producer(ChrRange range)
         {
-            _isReadingChunks = true;
+            _isProducingChunks = true;
 
             string indexFilePath = String.Format("{0}.idx", _antPath);
 
@@ -252,7 +254,7 @@ namespace Illumina.AntTools
                     _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(indicesIndex, ReadChunk(reader), range));
                 }
 
-                _isReadingChunks = false;
+                _isProducingChunks = false;
             }
         }
 
@@ -279,11 +281,11 @@ namespace Illumina.AntTools
 
             try
             {
-                while (_isReadingChunks || _chunks.Any())
+                while (_isProducingChunks || _chunks.Any())
                 {
                     if (!_chunks.Any())
                     {
-                        Thread.Sleep(100);
+                        Thread.Sleep(10);
 
                         continue;
                     }
@@ -305,12 +307,7 @@ namespace Illumina.AntTools
                     List<AnnotationResult> results = buffer.DeserializeFromBinary(variant => VariantPredicate(variant, range, isStatsLoad, isValidating)).ToList();
 
                     if (!isStatsLoad)
-                    {
-                        lock (_tempResultsLock)
-                        {
-                            _tempResults[chunkIndex] = results;
-                        }
-                    }
+                        _tempResults[chunkIndex] = results;
 
                     Interlocked.Increment(ref _chunkFinishedCount);
                 }
@@ -338,19 +335,18 @@ namespace Illumina.AntTools
 
             while (chunkIndex < _indices.Count())
             {
-                List<AnnotationResult> chunkResults;
-
-                lock (_tempResultsLock)
+                if (_tempResults[chunkIndex] == null)
                 {
-                    if (_tempResults[chunkIndex] == null)
-                    {
-                        Thread.Sleep(10);
+                    // if we expect that a chunk might could be added, wait for it; otherwise increment the index and continue
+                    if (!_isProducingChunks && !_workerThreads.Any(p => p.IsAlive))
+                        chunkIndex++;
+                    else
+                        Thread.Sleep(100);
 
-                        continue;
-                    }
-
-                    chunkResults = _tempResults[chunkIndex++];
+                    continue;
                 }
+
+                List<AnnotationResult> chunkResults = _tempResults[chunkIndex++];
 
                 int recordCounter = 1;
                 foreach (AnnotationResult result in chunkResults)
