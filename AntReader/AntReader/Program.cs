@@ -26,6 +26,7 @@ namespace Illumina.AntTools
             bool doValidate = false;
             bool doGenerateStats = false;
             ChrRange range = null;
+            int limit = 0;
             bool isBedOutput = false;
 
             OptionSet options = new OptionSet()
@@ -37,7 +38,8 @@ namespace Illumina.AntTools
                         throw new ArgumentException("Invalid range value given.");
 
                     range = ParseChrRange(chrRange);
-                });
+                })
+                .Add("limit=", n => limit = Convert.ToInt32(n));
 
             options.Parse(args);
 
@@ -80,17 +82,21 @@ namespace Illumina.AntTools
             sw.Start();
 
             int collectionId;
-            int count = 0;
+            int recordCount = 0;
 
             foreach (AnnotationResult record in reader.Load(out collectionId, range))
             {
                 if (!record.Annotation.Any())
                     continue;
 
-                count++;
-
                 Console.WriteLine(record.ToJson());
+
+                if (limit > 0 && recordCount++ >= limit)
+                    break;
             }
+
+            if (recordCount == 0)
+                Console.WriteLine("No results.");
 
             sw.Stop();
         }

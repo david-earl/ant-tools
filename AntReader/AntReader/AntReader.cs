@@ -24,6 +24,8 @@ namespace Illumina.AntTools
             {8, new Tuple<string, TranscriptSource>("75.2", TranscriptSource.RefSeq) },
         };
 
+        private object _tempResultsLock = new object();
+        private List<AnnotationResult>[] _tempResults;
         private BlockingCollection<AnnotationResult> _annotation;
 
         private AntIndex[] _indices = null;
@@ -36,7 +38,7 @@ namespace Illumina.AntTools
 
         public readonly byte _antFormatNumber = 3;
 
-        private readonly int _numWorkerThreads = 8;
+        private readonly int _numWorkerThreads = Environment.ProcessorCount;
 
         private readonly string _antPath;
 
@@ -171,6 +173,10 @@ namespace Illumina.AntTools
                 thread.Start();
             }
 
+            Thread yieldThread = new Thread(YieldWorker);
+            yieldThread.Name = "ANT Yield Thread";
+            yieldThread.Start();
+
             return annotationCollectionId;
         }
 
@@ -184,6 +190,8 @@ namespace Illumina.AntTools
                 throw new Exception("Can't find index file.");
 
             _indices = ParseAntIndex(indexFilePath);
+
+            _tempResults = new List<AnnotationResult>[_indices.Count()];
 
             // if the user doesn't specify any indexing, default to everything
             if (range == null)
@@ -298,16 +306,20 @@ namespace Illumina.AntTools
 
                     if (!isStatsLoad)
                     {
-                        foreach (AnnotationResult record in results)
+                        lock (_tempResultsLock)
                         {
-                            _annotation.Add(record);
+                            _tempResults[chunkIndex] = results;
                         }
+                        //foreach (AnnotationResult record in results)
+                        //{
+                        //    _annotation.Add(record);
+                        //}
                     }
 
                     Interlocked.Increment(ref _chunkFinishedCount);
                 }
 
-                _annotation.CompleteAdding();
+                //_annotation.CompleteAdding();
             }
             catch (Exception e)
             {
@@ -318,6 +330,37 @@ namespace Illumina.AntTools
                 if (buffer != null && _chunks != null && chunkIndex > 0)
                     _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(chunkIndex, buffer, range));
             }
+        }
+
+        private void YieldWorker()
+        {
+            int chunkIndex = 0;
+
+            while (chunkIndex < _indices.Count())
+            {
+                List<AnnotationResult> chunkResults;
+
+                lock (_tempResultsLock)
+                {
+                    if (_tempResults[chunkIndex] == null)
+                    {
+                        Thread.Sleep(10);
+
+                        continue;
+                    }
+
+                    chunkResults = _tempResults[chunkIndex++];
+                }
+
+                int recordCounter = 1;
+                foreach (AnnotationResult result in chunkResults)
+                {
+                    result.Variant.Id = (chunkIndex - 1)*chunkResults.Count() + recordCounter++; 
+                    _annotation.Add(result);
+                }
+            }
+
+            _annotation.CompleteAdding();
         }
 
         private bool VariantPredicate(Variant variant, ChrRange range, bool isStatsLoad, bool isValidating)
