@@ -310,16 +310,10 @@ namespace Illumina.AntTools
                         {
                             _tempResults[chunkIndex] = results;
                         }
-                        //foreach (AnnotationResult record in results)
-                        //{
-                        //    _annotation.Add(record);
-                        //}
                     }
 
                     Interlocked.Increment(ref _chunkFinishedCount);
                 }
-
-                //_annotation.CompleteAdding();
             }
             catch (Exception e)
             {
@@ -335,6 +329,12 @@ namespace Illumina.AntTools
         private void YieldWorker()
         {
             int chunkIndex = 0;
+
+            // wait for the Producer thread to parse the index file
+            while (_indices == null)
+            {
+                Thread.Sleep(10);
+            }
 
             while (chunkIndex < _indices.Count())
             {
