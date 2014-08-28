@@ -1,0 +1,30 @@
+ant-tools
+=========
+
+ant-tools facilitates the extraction of variant annotation from the .ant files produced by Illumina sequencing applications.
+
+
+Requirements:
+Python 2.7
+
+
+Build Requirements:
+mono
+glibc
+
+
+Usage:
+
+  AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]
+  
+  antFileName: the fully qualified path to the .ant file.
+  
+  Options:
+    --validate: validates that the ANT file is in the correct structure.
+    --stats: provides a summary of annotation version, contents, etc.
+    --all: specifies that empty records (i.e. no annotation) should be included in the output.
+    --range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.
+    --bed=PATH specifies an input BED file indicating the regions for which to export annotation.
+    --bedout: specifies that the output should be BED-like in format, i.e. CHROM	START	STOP	{JSON_DATA}
+    
+    
