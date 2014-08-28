@@ -130,7 +130,7 @@ namespace Illumina.AntTools
         private static void PrintUsage()
         {
             Console.WriteLine("usage:");
-            Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
+            Console.WriteLine("ant-tools.py antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
             Console.WriteLine("\n\rOptions:");
             Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
