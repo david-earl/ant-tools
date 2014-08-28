@@ -5,17 +5,17 @@ ant-tools facilitates the extraction of variant annotation from the .ant files p
 
 
 Requirements:
+git
 Python 2.7
 
-
 Build Requirements:
-mono
+mono (including source)
 glibc
 
 
 Usage:
 
-  AnnotationWriter antFileName [--validate] [--stats] [--all] [--bedout] [--range=RANGE] [--bed=BED_PATH]
+  ant-tools.py antFileName [--validate] [--stats] [--all] [--bedout] [--range=RANGE] [--bed=BED_PATH]
   
   antFileName: the fully qualified path to the .ant file.
   
@@ -28,4 +28,13 @@ Usage:
     --bed=BED_PATH: specifies an input BED file indicating the regions for which to export annotation.
     
     
-    
+Installation:
+From a command prompt:
+git clone https://github.com/sequencing/ant-tools
+
+
+ant-tools ships with precompiled binaries for major Linux distributions.  If a binary does not exist or is incompatible with your distro, you must manually build ant-tools.
+
+Build Instructions:
+  - in build.sh, MONO_SOURCE_DIR must be set to reflect your environment.
+  - from a command prompt, execute ./build.sh
