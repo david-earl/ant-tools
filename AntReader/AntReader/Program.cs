@@ -34,6 +34,7 @@ namespace Illumina.AntTools
             OptionSet options = new OptionSet()
                 .Add("validate", dontCare => doValidate = true)
                 .Add("stats", dontCare => doGenerateStats = true)
+                .Add("bedout", dontCare => isBedOutput = true)
                 .Add("range=", chrRange =>
                 {
                     if (String.IsNullOrEmpty(chrRange))
@@ -113,7 +114,11 @@ namespace Illumina.AntTools
                 if (limit > 0 && recordCount >= limit)
                     break;
 
-                Console.WriteLine(record.ToJson());
+                string json = record.ToJson();
+
+                string output = isBedOutput ? String.Format("{0}\t{1}\t{2}\t{3}", record.Variant.Chromosome, record.Variant.Position, record.Variant.Position, json) : json;
+                    
+                Console.WriteLine(output);
             }
 
             if (recordCount == 0)
@@ -125,22 +130,15 @@ namespace Illumina.AntTools
         private static void PrintUsage()
         {
             Console.WriteLine("usage:");
-            
             Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
-
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
-
             Console.WriteLine("\n\rOptions:");
-
             Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
-
             Console.WriteLine("\t--stats: provides a summary of annotation version, contents, etc.");
-
             Console.WriteLine("\t--all: specifies that empty records (i.e. no annotation) should be included in the output.");
-
-            Console.WriteLine("\t--range RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
-
-            Console.WriteLine("\t--bed: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
+            Console.WriteLine("\t--range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
+            Console.WriteLine("\t--bed=PATH specifies an input BED file indicating the regions for which to export annotation.");
+            Console.WriteLine("\t--bedout: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
         }
 
         private static List<ChrRange> ParseBed(string bedFilePath)
