@@ -15,7 +15,7 @@ glibc
 
 Usage:
 
-  AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]
+  AnnotationWriter antFileName [--validate] [--stats] [--all] [--bedout] [--range=RANGE] [--bed=BED_PATH]
   
   antFileName: the fully qualified path to the .ant file.
   
@@ -23,8 +23,9 @@ Usage:
     --validate: validates that the ANT file is in the correct structure.
     --stats: provides a summary of annotation version, contents, etc.
     --all: specifies that empty records (i.e. no annotation) should be included in the output.
-    --range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.
-    --bed=PATH specifies an input BED file indicating the regions for which to export annotation.
     --bedout: specifies that the output should be BED-like in format, i.e. CHROM	START	STOP	{JSON_DATA}
+    --range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.
+    --bed=BED_PATH specifies an input BED file indicating the regions for which to export annotation.
+    
     
     
