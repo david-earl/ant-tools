@@ -25,7 +25,7 @@ Usage:
     --all: specifies that empty records (i.e. no annotation) should be included in the output.
     --bedout: specifies that the output should be BED-like in format, i.e. CHROM	START	STOP	{JSON_DATA}
     --range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.
-    --bed=BED_PATH specifies an input BED file indicating the regions for which to export annotation.
+    --bed=BED_PATH: specifies an input BED file indicating the regions for which to export annotation.
     
     
     
