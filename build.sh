@@ -8,6 +8,11 @@ MONO_SOURCE_DIR='/opt/mono-3.6.0'
 export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
 export C_INCLUDE_PATH="$MONO_SOURCE_DIR"
 
+if [ -z `command -v mono` ]; then
+    echo "Can't find mono--please check that mono is installed."
+
+    exit 1
+fi
 
 cwd=$(cd $(dirname "$0"); pwd)
 
