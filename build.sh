@@ -3,7 +3,7 @@
 EXE_NAME='ant-tools'
 
 # If YOU DON'T HAVE A WORKING MONO DEV ENV, THIS MAY NEED TO BE SET FOR YOUR ENV
-MONO_SOURCE_DIR='/Users/dquackenbush/DATA/mono/'
+MONO_SOURCE_DIR='/path/to/mono/source'
 
 if [ -z `command -v mono` ]; then
     echo "Can't find mono--please check that mono is installed."
