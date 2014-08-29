@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -25,19 +26,38 @@ namespace Illumina.AntTools
 
             bool doValidate = false;
             bool doGenerateStats = false;
-            ChrRange range = null;
+            bool doIncludeAllResults = false;
+            List<ChrRange> ranges = null;
             int limit = 0;
             bool isBedOutput = false;
 
             OptionSet options = new OptionSet()
                 .Add("validate", dontCare => doValidate = true)
                 .Add("stats", dontCare => doGenerateStats = true)
+                .Add("bedout", dontCare => isBedOutput = true)
                 .Add("range=", chrRange =>
                 {
                     if (String.IsNullOrEmpty(chrRange))
                         throw new ArgumentException("Invalid range value given.");
 
-                    range = ParseChrRange(chrRange);
+                    if (ranges != null)
+                        throw new ArgumentException("Conflicting arguments: 'range' and 'bed' are mutually exclusive.");
+
+                    ranges = new List<ChrRange>() { ParseChrRange(chrRange) };
+                })
+                .Add("bed=", bedPath =>
+                {
+                    if (ranges != null)
+                        throw new ArgumentException("Conflicting arguments: 'range' and 'bed' are mutually exclusive.");
+
+                    ranges = ParseBed(bedPath);
+                })
+                .Add("all", dontCare =>
+                {
+                    if (ranges != null)
+                        throw new ArgumentException("Conflicting arguments: 'all' and 'bed'/'range' are mutually exclusive.");
+
+                    doIncludeAllResults = true;
                 })
                 .Add("limit=", n => limit = Convert.ToInt32(n));
 
@@ -84,17 +104,21 @@ namespace Illumina.AntTools
             int collectionId;
             int recordCount = 0;
 
-            foreach (AnnotationResult record in reader.Load(out collectionId, range))
+            foreach (AnnotationResult record in reader.Load(out collectionId, ranges))
             {
                 recordCount++;
 
-                if (!record.Annotation.Any())
+                if (!record.Annotation.Any() && !doIncludeAllResults)
                     continue;
 
                 if (limit > 0 && recordCount >= limit)
                     break;
 
-                Console.WriteLine(record.ToJson());
+                string json = record.ToJson();
+
+                string output = isBedOutput ? String.Format("{0}\t{1}\t{2}\t{3}", record.Variant.Chromosome, record.Variant.Position, record.Variant.Position, json) : json;
+                    
+                Console.WriteLine(output);
             }
 
             if (recordCount == 0)
@@ -106,20 +130,43 @@ namespace Illumina.AntTools
         private static void PrintUsage()
         {
             Console.WriteLine("usage:");
-            
-            Console.WriteLine("AnnotationWriter antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
-
+            Console.WriteLine("ant-tools.py antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
-
             Console.WriteLine("\n\rOptions:");
-
             Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
-
             Console.WriteLine("\t--stats: provides a summary of annotation version, contents, etc.");
+            Console.WriteLine("\t--all: specifies that empty records (i.e. no annotation) should be included in the output.");
+            Console.WriteLine("\t--range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
+            Console.WriteLine("\t--bed=PATH specifies an input BED file indicating the regions for which to export annotation.");
+            Console.WriteLine("\t--bedout: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
+        }
 
-            Console.WriteLine("\t--range RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
+        private static List<ChrRange> ParseBed(string bedFilePath)
+        {
+            if (!File.Exists(bedFilePath))
+                throw new Exception(String.Format("Unable to find the specified BED file: {0}", bedFilePath));
 
-            Console.WriteLine("\t--bed: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
+            List<ChrRange> ranges = new List<ChrRange>();
+
+            using (StreamReader reader = new StreamReader(bedFilePath))
+            {
+                string line;
+
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (String.IsNullOrEmpty(line) || line.StartsWith("#"))
+                        continue;
+
+                    string[] splits = line.Split('\t');
+
+                    if (splits.Length < 3)
+                        continue; // FAIL?
+
+                    ranges.Add(new ChrRange() { Chromosome = splits[0], StartPosition = Convert.ToInt64(splits[1]), StopPosition = Convert.ToInt64(splits[2]) } );
+                }
+            }
+
+            return ranges;
         }
 
         private static ChrRange ParseChrRange(string chrRange)

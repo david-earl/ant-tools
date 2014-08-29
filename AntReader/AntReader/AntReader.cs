@@ -28,7 +28,7 @@ namespace Illumina.AntTools
         private BlockingCollection<AnnotationResult> _annotation;
 
         private AntIndex[] _indices = null;
-        private ConcurrentQueue<Tuple<int, byte[], ChrRange>> _chunks;
+        private ConcurrentQueue<Tuple<int, byte[], List<ChrRange>>> _chunks;
         private Stats _antStats;
         private object _statsLock = new object();
         private bool _isCancelled = false;
@@ -57,9 +57,9 @@ namespace Illumina.AntTools
         }
 
 
-        public IEnumerable<AnnotationResult> Load(out int annotationCollectionId, ChrRange range = null)
+        public IEnumerable<AnnotationResult> Load(out int annotationCollectionId, List<ChrRange> ranges = null)
         {
-            annotationCollectionId = Init(range);
+            annotationCollectionId = Init(ranges);
 
             return _annotation.GetConsumingEnumerable();
         }
@@ -152,14 +152,14 @@ namespace Illumina.AntTools
         }
 
 
-        private int Init(ChrRange range = null, bool isValidating = false, bool isStats = false)
+        private int Init(List<ChrRange> ranges = null, bool isValidating = false, bool isStats = false)
         {
-            _chunks = new ConcurrentQueue<Tuple<int, byte[], ChrRange>>();
+            _chunks = new ConcurrentQueue<Tuple<int, byte[], List<ChrRange>>>();
             _annotation = new BlockingCollection<AnnotationResult>();
 
             int annotationCollectionId = ParseAntHeader(_antPath);
 
-            Thread producerThread = new Thread(() => Producer(range));
+            Thread producerThread = new Thread(() => Producer(ranges));
             producerThread.Name = "ANT Producer Thread";
             producerThread.Start();
 
@@ -182,7 +182,7 @@ namespace Illumina.AntTools
             return annotationCollectionId;
         }
 
-        private void Producer(ChrRange range)
+        private void Producer(List<ChrRange> ranges)
         {
             _isProducingChunks = true;
 
@@ -195,29 +195,25 @@ namespace Illumina.AntTools
 
             _tempResults = new List<AnnotationResult>[_indices.Count()];
 
-            // if the user doesn't specify any indexing, default to everything
-            if (range == null)
-            {
+            int rangesIndex = 0;
+            ChrRange range = ranges == null ? null : ranges[rangesIndex];
 
-            }
+            AntIndex currentIndex;
+            AntIndex nextIndex;
 
             using (FileStream stream = File.Open(_antPath, FileMode.Open))
             using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
             {
                 for (int indicesIndex = 0; indicesIndex < _indices.Length; indicesIndex++)
                 {
-                    AntIndex currentIndex = _indices[indicesIndex];
+                    currentIndex = _indices[indicesIndex];
+                    nextIndex = indicesIndex < _indices.Length - 1 ? _indices[indicesIndex + 1] : null;
 
                     if (range != null)
                     {
                         if (Chromosome.IsLessThan(currentIndex.Chromosome, range.Chromosome))
                         {
-                            if (indicesIndex == _indices.Length - 1)
-                                continue;
-
-                            AntIndex nextIndex = _indices[indicesIndex + 1];
-
-                            if (Chromosome.IsLessThan(nextIndex.Chromosome, range.Chromosome))
+                            if (nextIndex == null || Chromosome.IsLessThan(nextIndex.Chromosome, range.Chromosome))
                                 continue;
                         }
                         else if (Chromosome.IsGreaterThan(currentIndex.Chromosome, range.Chromosome))
@@ -235,14 +231,17 @@ namespace Illumina.AntTools
                         {
                             if (currentIndex.ChrPosition < range.StartPosition)
                             {
-                                AntIndex nextIndex = _indices[indicesIndex + 1];
-
-                                if (nextIndex.ChrPosition <= range.StartPosition)
+                                if (nextIndex != null && nextIndex.Chromosome.Equals(range.Chromosome) && nextIndex.ChrPosition <= range.StartPosition)
                                     continue;
                             }
                             else if (currentIndex.ChrPosition > range.StopPosition)
                             {
-                                // TODO: at this point we should be able to safely break the loop
+                                if (ranges != null && ++rangesIndex < ranges.Count())
+                                {
+                                    range = ranges[rangesIndex];
+
+                                    indicesIndex--; // so we stay on the same index
+                                }
 
                                 continue;
                             }
@@ -251,7 +250,10 @@ namespace Illumina.AntTools
 
                     reader.BaseStream.Position = currentIndex.FilePosition;
 
-                    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(indicesIndex, ReadChunk(reader), range));
+                    List<ChrRange> chunkRanges = ranges == null ? null : ranges.Where(
+                             p => p.Chromosome.Equals(currentIndex.Chromosome) && (!p.Chromosome.Equals(nextIndex.Chromosome) || (p.StartPosition >= currentIndex.ChrPosition || p.StopPosition < nextIndex.ChrPosition))).ToList();
+
+                    _chunks.Enqueue(new Tuple<int, byte[], List<ChrRange>>(indicesIndex, ReadChunk(reader), chunkRanges));
                 }
 
                 _isProducingChunks = false;
@@ -277,7 +279,7 @@ namespace Illumina.AntTools
         {
             int chunkIndex = -1;
             byte[] buffer = null;
-            ChrRange range = null;
+            List<ChrRange> ranges = null;
 
             try
             {
@@ -293,7 +295,7 @@ namespace Illumina.AntTools
                     if (ProgressCallback != null && Thread.CurrentThread.Name.Equals("ANT_chunk_worker_1"))
                         ProgressCallback(1.0 - ((double) _chunks.Count() / _indices.Length));
 
-                    Tuple<int, byte[], ChrRange> chunk;
+                    Tuple<int, byte[], List<ChrRange>> chunk;
 
                     _chunks.TryDequeue(out chunk);
                     
@@ -302,9 +304,9 @@ namespace Illumina.AntTools
 
                     chunkIndex = chunk.Item1;
                     buffer = chunk.Item2;
-                    range = chunk.Item3;
+                    ranges = chunk.Item3;
 
-                    List<AnnotationResult> results = buffer.DeserializeFromBinary(variant => VariantPredicate(variant, range, isStatsLoad, isValidating)).ToList();
+                    List<AnnotationResult> results = buffer.DeserializeFromBinary(variant => VariantPredicate(variant, ranges, isStatsLoad, isValidating)).ToList();
 
                     if (!isStatsLoad)
                         _tempResults[chunkIndex] = results;
@@ -319,7 +321,7 @@ namespace Illumina.AntTools
                 // bail on this thread and let one of the others pick it up
 
                 if (buffer != null && _chunks != null && chunkIndex > 0)
-                    _chunks.Enqueue(new Tuple<int, byte[], ChrRange>(chunkIndex, buffer, range));
+                    _chunks.Enqueue(new Tuple<int, byte[], List<ChrRange>>(chunkIndex, buffer, ranges));
             }
         }
 
@@ -359,7 +361,7 @@ namespace Illumina.AntTools
             _annotation.CompleteAdding();
         }
 
-        private bool VariantPredicate(Variant variant, ChrRange range, bool isStatsLoad, bool isValidating)
+        private bool VariantPredicate(Variant variant, List<ChrRange> ranges, bool isStatsLoad, bool isValidating)
         {
             if (isValidating)
                 return false;
@@ -389,10 +391,10 @@ namespace Illumina.AntTools
                 return false;
             }
 
-            if (range == null)
+            if (ranges == null || !ranges.Any())
                 return true;
 
-            return variant.Chromosome == range.Chromosome && range.StartPosition <= variant.Position && variant.Position <= range.StopPosition;
+            return ranges.Any(p => variant.Chromosome == p.Chromosome && p.StartPosition <= variant.Position && variant.Position <= p.StopPosition);
         }
 
         private int ParseAntHeader(string filepath)
