@@ -2,11 +2,8 @@
 
 EXE_NAME='ant-tools'
 
-# THIS NEEDS TO BE SET FOR YOUR ENV
+# If YOU DON'T HAVE A WORKING MONO DEV ENV, THIS MAY NEED TO BE SET FOR YOUR ENV
 MONO_SOURCE_DIR='/opt/mono-3.6.0'
-
-export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
-export C_INCLUDE_PATH="$MONO_SOURCE_DIR"
 
 if [ -z `command -v mono` ]; then
     echo "Can't find mono--please check that mono is installed."
@@ -14,7 +11,13 @@ if [ -z `command -v mono` ]; then
     exit 1
 fi
 
-cwd=$(cd $(dirname "$0"); pwd)
+if [ -z `echo $PKG_CONFIG_PATH | grep "mono"` ]; then
+
+    export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
+    export C_INCLUDE_PATH="$MONO_SOURCE_DIR"
+fi
+
+cwd=$(readlink -f $(dirname ${BASH_SOURCE[0]}))
 
 platform=$(uname)
 

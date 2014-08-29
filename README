@@ -36,5 +36,9 @@ git clone https://github.com/sequencing/ant-tools
 ant-tools ships with precompiled binaries for major Linux distributions.  If a binary does not exist or is incompatible with your distro, you must manually build ant-tools.
 
 Build Instructions:
-  - in build.sh, MONO_SOURCE_DIR must be set to reflect your environment.
-  - from a command prompt, execute ./build.sh
+  - If you don't already have a working mono dev env, download and install the mono MDK from http://www.mono-project.com/download/
+  - depending on your environment, you may need to update build.sh so that MONO_SOURCE_DIR reflects your environment.
+  - from a command prompt, execute:
+    git clone https://github.com/sequencing/ant-tools
+    cd ant-tools
+    source build.sh
