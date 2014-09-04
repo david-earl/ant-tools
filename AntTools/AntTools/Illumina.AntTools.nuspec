@@ -1,0 +1,21 @@
+﻿<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>Illumina.AntTools</id>
+    <version>$version$</version>
+    <authors>Illumina, Inc.</authors>
+    <title>Illumina.AntTools</title>
+    <owners>ILMN - EIBU</owners>
+    <projectUrl>http://annotation.basespace.illumina.com</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Annotator annotates.</description>
+    <releaseNotes></releaseNotes>
+    <copyright>Copyright 2014</copyright>
+    <references>
+      <reference file="Illumina.Annotator.Model.dll" />
+    </references>
+  </metadata>
+  <files> 
+    <file src="bin\Release\AntTools.dll" target="lib"/>
+  </files>
+</package>
