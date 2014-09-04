@@ -4,11 +4,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Illumina.Annotator.Model;
+
 using Mono.Options;
 
 using ServiceStack.Text;
 
+using Illumina.Annotator.Model;
 using Illumina.AntTools.Model;
 
 namespace Illumina.AntTools
