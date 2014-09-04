@@ -1,12 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 
 EXE_NAME='ant-tools'
 
-# THIS NEEDS TO BE SET FOR YOUR ENV
-MONO_SOURCE_DIR='/opt/mono-3.6.0'
-
-export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
-export C_INCLUDE_PATH="$MONO_SOURCE_DIR"
+# If YOU DON'T HAVE A WORKING MONO DEV ENV, THIS MAY NEED TO BE SET FOR YOUR ENV
+MONO_SOURCE_DIR='/path/to/mono/source'
 
 if [ -z `command -v mono` ]; then
     echo "Can't find mono--please check that mono is installed."
@@ -14,17 +11,25 @@ if [ -z `command -v mono` ]; then
     exit 1
 fi
 
-cwd=$(cd $(dirname "$0"); pwd)
+if [ -z `echo $PKG_CONFIG_PATH | grep "mono"` ]; then
+
+    export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
+    export C_INCLUDE_PATH="$MONO_SOURCE_DIR"
+fi
 
 platform=$(uname)
 
 if [[ "$platform" == 'Linux' ]]; then
+  cwd=$(readlink -f $(dirname ${BASH_SOURCE[0]}))
+
   echo "Building for linux..." 
 
   bin_dir="$cwd/bin/x86_64"
 
 elif [[ "$platform" == 'Darwin' ]]; then
   echo "Building for OSX..." 
+
+  cwd=$(cd "$(dirname "$0")"; pwd)
 
   bin_dir="$cwd/bin/darwin_x86_64"
 
