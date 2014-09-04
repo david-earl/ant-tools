@@ -50,9 +50,9 @@ bin_path="$bin_dir/$EXE_NAME"
 xbuild /p:Configuration=Release ./AntReader/AntReader.sln
 
 # switch to the directory of the target exe, which allows us to specify *.dll, which works around a mkbundle bug
-cd AntReader/AntReader/bin/Release
+cd AntTools/AntTools/bin/Release
 
-mkbundle --static --deps -o "$bin_path" "$cwd/AntReader/AntReader/bin/Release/AntReader.exe" *.dll
+mkbundle --static --deps -o "$bin_path" "$cwd/AntTools/AntTools/bin/Release/AntTools.exe" *.dll
 
 cd -
 
