@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("AntTools")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Illumina.AntTools")]
+[assembly: AssemblyDescription("Facilitates the extraction of variant annnotation from Illumina .ant files.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Illumina, Inc.")]
 [assembly: AssemblyProduct("AntTools")]
