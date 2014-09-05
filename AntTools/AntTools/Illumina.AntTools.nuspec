@@ -8,13 +8,14 @@
     <owners>ILMN - EIBU</owners>
     <projectUrl>http://annotation.basespace.illumina.com</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <description>Annotator annotates.</description>
+    <description>.</description>
     <releaseNotes></releaseNotes>
     <copyright>Copyright 2014</copyright>
-    <references>
-      <reference file="Illumina.Annotator.Model.dll" />
-    </references>
   </metadata>
+  <dependencies>
+    <dependency id="Illumina.Annotator.Model" version="1.0.10.42" />
+    <dependency id="DotNetZip" version="1.9.3" />
+  </dependencies>
   <files> 
     <file src="bin\Release\AntTools.dll" target="lib"/>
   </files>

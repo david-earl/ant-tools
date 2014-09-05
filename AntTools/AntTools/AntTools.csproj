@@ -33,9 +33,9 @@
     <StartupObject />
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Illumina.Annotator.Model, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="Illumina.Annotator.Model, Version=1.0.10.42, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Illumina.Annotator.Model.1.0.10.38\Illumina.Annotator.Model.dll</HintPath>
+      <HintPath>..\packages\Illumina.Annotator.Model.1.0.10.42\lib\Illumina.Annotator.Model.dll</HintPath>
     </Reference>
     <Reference Include="Ionic.Zip">
       <HintPath>..\packages\DotNetZip.1.9.3\lib\net20\Ionic.Zip.dll</HintPath>
