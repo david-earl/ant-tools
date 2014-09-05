@@ -11,11 +11,11 @@
     <description>.</description>
     <releaseNotes></releaseNotes>
     <copyright>Copyright 2014</copyright>
+    <dependencies>
+      <dependency id="Illumina.Annotator.Model" version="1.0.10.42" />
+      <dependency id="DotNetZip" version="1.9.3" />
+    </dependencies>
   </metadata>
-  <dependencies>
-    <dependency id="Illumina.Annotator.Model" version="1.0.10.42" />
-    <dependency id="DotNetZip" version="1.9.3" />
-  </dependencies>
   <files> 
     <file src="bin\Release\AntTools.dll" target="lib"/>
   </files>
