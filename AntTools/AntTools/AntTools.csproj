@@ -7,8 +7,8 @@
     <ProjectGuid>{53B8789E-50A0-480B-B123-DFB97A21934D}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>AntTools</RootNamespace>
-    <AssemblyName>AntTools</AssemblyName>
+    <RootNamespace>Illumina.AntTools</RootNamespace>
+    <AssemblyName>Illumina.AntTools</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
