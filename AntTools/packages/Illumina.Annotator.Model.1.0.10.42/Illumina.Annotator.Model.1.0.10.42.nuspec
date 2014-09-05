@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>Illumina.Annotator.Model</id>
+    <version>1.0.10.42</version>
+    <title>Illumina.Annotator.Model</title>
+    <authors>Illumina, Inc.</authors>
+    <owners>ILMN - EIBU</owners>
+    <projectUrl>http://annotation.basespace.illumina.com/</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Defines the core model used by Illumina.Annotator and Illumina.AntTools.</description>
+    <releaseNotes />
+    <references>
+      <reference file="Illumina.Annotator.Model.dll" />
+    </references>
+  </metadata>
+</package>
