@@ -7,13 +7,13 @@ MONO_SOURCE_DIR='/path/to/source'
 
 if [ -z `command -v mono` ]; then
     echo "Can't find mono--please check that mono is installed."
-    exit 1
+    kill -INT $$
 fi
 
 if [ -z `echo $PKG_CONFIG_PATH | grep "mono"` ]; then
     if [ "$MONO_SOURCE_DIR" == '/path/to/source' ]; then
-        echo 'Can''t find mono source dir--please update ''MONO_SOURCE_DIR'' in ''build.sh'''
-        exit 1
+        echo "Can't find mono source dir--please update 'MONO_SOURCE_DIR' in 'build.sh'"
+        kill -INT $$
     fi
 
     export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
