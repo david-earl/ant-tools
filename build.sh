@@ -3,15 +3,18 @@
 EXE_NAME='ant-tools'
 
 # If YOU DON'T HAVE A WORKING MONO DEV ENV, THIS MAY NEED TO BE SET FOR YOUR ENV
-MONO_SOURCE_DIR='/path/to/mono/source'
+MONO_SOURCE_DIR='/path/to/source'
 
 if [ -z `command -v mono` ]; then
     echo "Can't find mono--please check that mono is installed."
-
-    exit 1
+    kill -INT $$
 fi
 
 if [ -z `echo $PKG_CONFIG_PATH | grep "mono"` ]; then
+    if [ "$MONO_SOURCE_DIR" == '/path/to/source' ]; then
+        echo "Can't find mono source dir--please update 'MONO_SOURCE_DIR' in 'build.sh'"
+        kill -INT $$
+    fi
 
     export PKG_CONFIG_PATH="$MONO_SOURCE_DIR/data/"
     export C_INCLUDE_PATH="$MONO_SOURCE_DIR"
@@ -47,12 +50,12 @@ fi
 
 bin_path="$bin_dir/$EXE_NAME"
 
-xbuild /p:Configuration=Release ./AntReader/AntReader.sln
+xbuild /p:Configuration=Release ./AntTools/AntTools.sln
 
 # switch to the directory of the target exe, which allows us to specify *.dll, which works around a mkbundle bug
-cd AntTools/AntTools/bin/Release
+cd AntTools/AntTools.ConsoleApp/bin/Release
 
-mkbundle --static --deps -o "$bin_path" "$cwd/AntTools/AntTools/bin/Release/AntTools.exe" *.dll
+mkbundle --static --deps -o "$bin_path" "$cwd/AntTools/AntTools.ConsoleApp/bin/Release/AntTools.exe" *.dll
 
 cd -
 
