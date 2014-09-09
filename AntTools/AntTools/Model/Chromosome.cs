@@ -27,6 +27,9 @@ namespace Illumina.AntTools.Model
         {
             TranscriptSource transcriptSource = InferTranscriptSource(lhs);
 
+            if (transcriptSource != InferTranscriptSource(rhs))
+                throw new Exception("Chromosome format mismatch; please ensure any specified ranges use the same chromosome format as the source .ant file.");
+
             if (!ChrsByTranscriptSource[transcriptSource].Contains(lhs) || !ChrsByTranscriptSource[transcriptSource].Contains(rhs))
                 throw new Exception("Unknown chr specified.");
 
@@ -36,6 +39,9 @@ namespace Illumina.AntTools.Model
         public static bool IsGreaterThan(string lhs, string rhs)
         {
             TranscriptSource transcriptSource = InferTranscriptSource(lhs);
+
+            if (transcriptSource != InferTranscriptSource(rhs))
+                throw new Exception("Chromosome format mismatch; please ensure any specified ranges use the same chromosome format as the source .ant file.");
 
             if (!ChrsByTranscriptSource[transcriptSource].Contains(lhs) || !ChrsByTranscriptSource[transcriptSource].Contains(rhs))
                 throw new Exception("Unknown chr specified.");

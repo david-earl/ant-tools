@@ -215,6 +215,9 @@ namespace Illumina.AntTools
                         {
                             if (nextIndex == null || Chromosome.IsLessThan(nextIndex.Chromosome, range.Chromosome))
                                 continue;
+
+                            if (nextIndex.Chromosome == range.Chromosome && nextIndex.ChrPosition < range.StopPosition)
+                                continue;
                         }
                         else if (Chromosome.IsGreaterThan(currentIndex.Chromosome, range.Chromosome))
                         {
