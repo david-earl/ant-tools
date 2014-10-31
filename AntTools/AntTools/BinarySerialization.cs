@@ -68,7 +68,7 @@ namespace Illumina.AntTools
             }
         }
 
-        public static IEnumerable<AnnotationResult> DeSerializeFromBinary(byte[] data, Func<Variant, bool> variantPredicate = null)
+        public static IEnumerable<AnnotationResult> DeSerializeFromBinary(byte[] data, Func<int, Variant, bool> variantPredicate = null)
         {
             using (MemoryStream ms = new MemoryStream(data))
             {
@@ -76,10 +76,10 @@ namespace Illumina.AntTools
             }
         }
 
-        public static IEnumerable<AnnotationResult> DeSerializeFromStream(Stream stream, Func<Variant, bool> variantPredicate)
+        public static IEnumerable<AnnotationResult> DeSerializeFromStream(Stream stream, Func<int, Variant, bool> variantPredicate)
         {
             if (variantPredicate == null)
-                variantPredicate = (dontCare) => { return true; };
+                variantPredicate = (dont, care) => { return true; };
 
             List<AnnotationResult> result = new List<AnnotationResult>();
 
@@ -101,9 +101,9 @@ namespace Illumina.AntTools
 
                 for (int recordCounter = 0; recordCounter < recordCount; recordCounter++)
                 {
-                    Variant variant = ReadVariant(reader);
+                    AnnotationResult record = new AnnotationResult() { Variant = ReadVariant(reader) };
 
-                    if (!variantPredicate(variant))
+                    if (!variantPredicate(recordCounter, record.Variant))
                     {
                         // read the group count
                         ushort _groupCount = reader.ReadUInt16();
@@ -132,20 +132,16 @@ namespace Illumina.AntTools
                             }
                         }
 
-                        // TODO: this was the right thing to do for VariantStudio...but I think it's no longer appropriate
-                        //result.Add(new AnnotationResult() { Variant = null, Annotation = null });
+                        // TODO: this was the right thing to do for VariantStudio...but I think it's no longer appropriate.  Does this break IONA/Isis?
+                        result.Add(record);
 
                         continue;
                     }
 
-                    AnnotationResult record = new AnnotationResult() { Annotation = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>() };
-
-                    // read the variant
-                    record.Variant = variant;
-                    //record.Variant = ReadVariant(reader);
-
                     // read the group count
                     ushort groupCount = reader.ReadUInt16();
+
+                    record.Annotation = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(groupCount);
 
                     for (int groupCounter = 0; groupCounter < groupCount; groupCounter++)
                     {

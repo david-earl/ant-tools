@@ -10,6 +10,7 @@ namespace Illumina.AntTools
     public class AntWriter : IDisposable
     {
         private const byte AntFormatNumber = 3;
+        private const int ChunkSize = 5000;
 
         private readonly BinaryWriter _antWriter;
         private readonly StreamWriter _indexWriter;
@@ -27,6 +28,16 @@ namespace Illumina.AntTools
             WriteHeader(annotationCollection);
         }
 
+        public void WriteAnnotation(IEnumerable<AnnotationResult> annotation)
+        {
+            List<AnnotationResult> anno = annotation.ToList();
+
+            for (int chunkIndex = 0; chunkIndex < (int) Math.Ceiling((double)anno.Count() / ChunkSize); chunkIndex++)
+            {
+                WriteAnnotationChunk(anno.Skip(chunkIndex * ChunkSize).Take(ChunkSize));
+            }
+        }
+
         public void WriteAnnotationChunk(IEnumerable<AnnotationResult> annotation)
         {
             if (annotation == null || !annotation.Any())
@@ -37,7 +48,6 @@ namespace Illumina.AntTools
             _indexWriter.WriteLine("{0}\t{1}\t{2}", firstVariant.Chromosome, firstVariant.Position, _antWriter.BaseStream.Position);
 
             byte[] chunkData = BinarySerialization.SerializeToBinary(annotation.ToList());
-            //byte[] chunkData = BinaryAnnotationSerializer.SerializeToBinary(annotation.ToList());
 
             _antWriter.Write(chunkData.Length);
             _antWriter.Write(chunkData);

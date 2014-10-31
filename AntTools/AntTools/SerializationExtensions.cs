@@ -13,7 +13,7 @@ namespace Illumina.AntTools
             return BinarySerialization.SerializeToBinary(annotation.ToList());
         }
 
-        public static IEnumerable<AnnotationResult> DeserializeFromBinary(this byte[] data, Func<Variant, bool> variantPredicate = null)
+        public static IEnumerable<AnnotationResult> DeserializeFromBinary(this byte[] data, Func<int, Variant, bool> variantPredicate = null)
         {
             return BinarySerialization.DeSerializeFromBinary(data, variantPredicate);
         }

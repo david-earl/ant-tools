@@ -1,6 +1,8 @@
 ﻿using System;
+using System.CodeDom;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -13,8 +15,10 @@ namespace Illumina.AntTools
 {
     public class AntReader
     {
-        // this smells bad, but it avoids an IAS dep
-        private static readonly Dictionary<int, Tuple<string, TranscriptSource>> _datasetInfoByAnnotationCollectionId = new Dictionary<int, Tuple<string, TranscriptSource>>()
+        private const int ChunkSize = 5000;
+
+        // this smells bad, but it avoids an IAS dep.  It needs to be manually curated to match the latest IAS AnnotationCollection state
+        internal static readonly Dictionary<int, Tuple<string, TranscriptSource>> _datasetInfoByAnnotationCollectionId = new Dictionary<int, Tuple<string, TranscriptSource>>()
         {
             {3, new Tuple<string, TranscriptSource>("72.4", TranscriptSource.Ensembl) },
             {4, new Tuple<string, TranscriptSource>("72.4", TranscriptSource.RefSeq) },
@@ -24,12 +28,13 @@ namespace Illumina.AntTools
             {8, new Tuple<string, TranscriptSource>("75.2", TranscriptSource.RefSeq) },
         };
 
+        private ConcurrentQueue<HackWrapper<Chunk>> _chunks;
         private List<AnnotationResult>[] _tempResults;
-        private BlockingCollection<AnnotationResult> _annotation;
+        private ConcurrentDictionary<int, AnnotationResult> _annotation;
 
         private AntIndex[] _indices = null;
-        private ConcurrentQueue<Tuple<int, byte[], List<ChrRange>>> _chunks;
         private Stats _antStats;
+
         private object _statsLock = new object();
         private bool _isCancelled = false;
         private bool _isProducingChunks = true;
@@ -38,9 +43,12 @@ namespace Illumina.AntTools
         public readonly byte _antFormatNumber = 3;
 
         private static readonly int _numWorkerThreads = Environment.ProcessorCount;
-        private List<Thread> _workerThreads = new List<Thread>(_numWorkerThreads); 
+        private List<Thread> _workerThreads = new List<Thread>(_numWorkerThreads);
+
+        private Func<int, Variant, bool> _userVariantPredicate;
 
         private readonly string _antPath;
+        private readonly int _annotationCollectionId;
 
 
         public string AntVersion
@@ -48,22 +56,56 @@ namespace Illumina.AntTools
             get { return String.Format("ANT{0}", _antFormatNumber); }
         }
 
+        public int MemoryAllocationLimitMb { get; set; }
+
         public Action<double> ProgressCallback { get; set; }
 
 
-        public AntReader(string filepath)
+        public AntReader(string filepath, out int annotationCollectionId)
         {
             _antPath = filepath;
+
+            _annotationCollectionId = ParseAntHeader(_antPath);
+
+            annotationCollectionId = _annotationCollectionId;
+
+            MemoryAllocationLimitMb = 2048;
         }
 
 
-        public IEnumerable<AnnotationResult> Load(out int annotationCollectionId, List<ChrRange> ranges = null)
+        public IEnumerable<AnnotationResult> Load(List<ChrRange> ranges = null)
         {
-            annotationCollectionId = Init(ranges);
+            Init(ranges);
 
-            return _annotation.GetConsumingEnumerable();
+            int recordIndex = 0;
+
+            while (_indices == null)
+            {
+                Thread.Sleep(10);
+            }
+
+            while (_chunkFinishedCount < _indices.Count() || _annotation.Any())
+            {
+                if (!_annotation.ContainsKey(recordIndex))
+                {
+                    Thread.Sleep(10);
+
+                    continue;
+                }
+
+                yield return _annotation[recordIndex];
+
+                AnnotationResult dontCare;
+                _annotation.TryRemove(recordIndex++, out dontCare);
+            }
         }
 
+        public IEnumerable<AnnotationResult> Load(Func<int, Variant, bool> variantPredicate)
+        {
+            _userVariantPredicate = variantPredicate;
+
+            return Load();
+        }
 
         public bool Validate()
         {
@@ -87,9 +129,9 @@ namespace Illumina.AntTools
 
         public void PrintAntStats()
         {
-            int annotationCollectionId = Init(null, false, true);
+            Init(null, false, true);
 
-            Tuple<string, TranscriptSource> dataInfo = _datasetInfoByAnnotationCollectionId.ContainsKey(annotationCollectionId) ? _datasetInfoByAnnotationCollectionId[annotationCollectionId] : new Tuple<string, TranscriptSource>("unknown", TranscriptSource.RefSeq);
+            Tuple<string, TranscriptSource> dataInfo = _datasetInfoByAnnotationCollectionId.ContainsKey(_annotationCollectionId) ? _datasetInfoByAnnotationCollectionId[_annotationCollectionId] : new Tuple<string, TranscriptSource>("unknown", TranscriptSource.RefSeq);
 
             _antStats = new Stats() { DatasetVersion = dataInfo.Item1, TranscriptSource = dataInfo.Item2, Ranges = new List<ChrRange>() };
 
@@ -104,9 +146,18 @@ namespace Illumina.AntTools
                 Console.Write("{0}%", (progress*100).ToString("0.00"));
             }; 
 
-            foreach (var dontCare in _annotation.GetConsumingEnumerable())
+            int recordIndex = 0;
+            while (_chunkFinishedCount < _indices.Count() || _annotation.Any())
             {
-                // wait for processing to complete
+                if (!_annotation.ContainsKey(recordIndex))
+                {
+                    Thread.Sleep(10);
+
+                    continue;
+                }
+
+                AnnotationResult dontCare;
+                _annotation.TryRemove(recordIndex++, out dontCare);
             }
 
             Console.WriteLine("\n\rANT stats:");
@@ -152,12 +203,10 @@ namespace Illumina.AntTools
         }
 
 
-        private int Init(List<ChrRange> ranges = null, bool isValidating = false, bool isStats = false)
-        {
-            _chunks = new ConcurrentQueue<Tuple<int, byte[], List<ChrRange>>>();
-            _annotation = new BlockingCollection<AnnotationResult>();
-
-            int annotationCollectionId = ParseAntHeader(_antPath);
+        private void Init(List<ChrRange> ranges = null, bool isValidating = false, bool isStats = false)
+        {          
+            _chunks = new ConcurrentQueue<HackWrapper<Chunk>>();
+            _annotation = new ConcurrentDictionary<int, AnnotationResult>();
 
             Thread producerThread = new Thread(() => Producer(ranges));
             producerThread.Name = "ANT Producer Thread";
@@ -174,12 +223,6 @@ namespace Illumina.AntTools
 
                 workerThread.Start();
             }
-
-            Thread yieldThread = new Thread(YieldWorker);
-            yieldThread.Name = "ANT Yield Thread";
-            yieldThread.Start();
-
-            return annotationCollectionId;
         }
 
         private void Producer(List<ChrRange> ranges)
@@ -201,7 +244,7 @@ namespace Illumina.AntTools
             AntIndex currentIndex;
             AntIndex nextIndex;
 
-            using (FileStream stream = File.Open(_antPath, FileMode.Open))
+            using (FileStream stream = new FileStream(_antPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
             using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
             {
                 for (int indicesIndex = 0; indicesIndex < _indices.Length; indicesIndex++)
@@ -254,9 +297,9 @@ namespace Illumina.AntTools
                     reader.BaseStream.Position = currentIndex.FilePosition;
 
                     List<ChrRange> chunkRanges = ranges == null ? null : ranges.Where(
-                             p => p.Chromosome.Equals(currentIndex.Chromosome) && (!p.Chromosome.Equals(nextIndex.Chromosome) || (p.StartPosition >= currentIndex.ChrPosition || p.StopPosition < nextIndex.ChrPosition))).ToList();
+                             p => p.Chromosome.Equals(currentIndex.Chromosome) && (nextIndex == null || !p.Chromosome.Equals(nextIndex.Chromosome) || (p.StartPosition >= currentIndex.ChrPosition || p.StopPosition < nextIndex.ChrPosition))).ToList();
 
-                    _chunks.Enqueue(new Tuple<int, byte[], List<ChrRange>>(indicesIndex, ReadChunk(reader), chunkRanges));
+                    _chunks.Enqueue(new HackWrapper<Chunk>(new Chunk(indicesIndex, ReadChunk(reader), chunkRanges)));
                 }
 
                 _isProducingChunks = false;
@@ -272,102 +315,74 @@ namespace Illumina.AntTools
             if (reader.Read(buffer, 0, chunkLength) != chunkLength)
                 throw new FileLoadException("An error occurred while parsing the file.");
 
-            byte[] copy = new byte[chunkLength];
-            Buffer.BlockCopy(buffer, 0, copy, 0, chunkLength);
-
-            return copy;
+            return buffer;
         }
 
         private void AntChunkWorker(bool isStatsLoad = false, bool isValidating = false)
         {
-            int chunkIndex = -1;
-            byte[] buffer = null;
-            List<ChrRange> ranges = null;
-
-            try
+            while (_isProducingChunks || _chunks.Any())
             {
-                while (_isProducingChunks || _chunks.Any())
+                bool keepTrying = true;
+                int retryCount = 0;
+
+                HackWrapper<Chunk> chunk = null;
+
+                while (keepTrying)
                 {
-                    if (!_chunks.Any())
+                    try
                     {
-                        Thread.Sleep(10);
+                        // wait for available chunks from the producer OR throttle based on amount of allocated memory
+                        if (!_chunks.Any() || (GC.GetTotalMemory(false) / 1048576) > MemoryAllocationLimitMb)
+                        {
+                            Thread.Sleep(10);
 
-                        continue;
+                            continue;
+                        }
+
+                        if (ProgressCallback != null && Thread.CurrentThread.Name.Equals("ANT_chunk_worker_1"))
+                            ProgressCallback(1.0 - ((double) _chunks.Count() / _indices.Length));
+
+                        if (chunk == null)
+                            _chunks.TryDequeue(out chunk);
+                        
+                        if (chunk == null || chunk.Item == null || chunk.Item.Data == null)
+                            continue;
+
+                        int index = chunk.Item.Id; // lambda capture
+
+                        List<AnnotationResult> results = chunk.Item.Data.DeserializeFromBinary((intraChunkIndex, variant) => VariantPredicate((index*ChunkSize) + intraChunkIndex, variant, chunk.Item.Ranges, isStatsLoad, isValidating)).ToList();
+
+                        chunk.Item = null;
+                        chunk = null;
+
+                        int recordCounter = 0;
+                        foreach (var foo in results)
+                        {
+                            int id = (index)*ChunkSize + recordCounter++;
+
+                            foo.Variant.Id = id;
+
+                            _annotation.TryAdd(id, foo);
+                        }
+
+                        Interlocked.Increment(ref _chunkFinishedCount);
                     }
-
-                    if (ProgressCallback != null && Thread.CurrentThread.Name.Equals("ANT_chunk_worker_1"))
-                        ProgressCallback(1.0 - ((double) _chunks.Count() / _indices.Length));
-
-                    Tuple<int, byte[], List<ChrRange>> chunk;
-
-                    _chunks.TryDequeue(out chunk);
-                    
-                    if (chunk == null || chunk.Item2 == null)
-                        continue;
-
-                    chunkIndex = chunk.Item1;
-                    buffer = chunk.Item2;
-                    ranges = chunk.Item3;
-
-                    List<AnnotationResult> results = buffer.DeserializeFromBinary(variant => VariantPredicate(variant, ranges, isStatsLoad, isValidating)).ToList();
-
-                    if (!isStatsLoad)
-                        _tempResults[chunkIndex] = results;
-
-                    Interlocked.Increment(ref _chunkFinishedCount);
+                    catch (Exception e)
+                    {
+                        if (retryCount++ > 3)
+                            throw;
+                    }
                 }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Thread exception: {0}", e.Message);
-
-                // bail on this thread and let one of the others pick it up
-
-                if (buffer != null && _chunks != null && chunkIndex > 0)
-                    _chunks.Enqueue(new Tuple<int, byte[], List<ChrRange>>(chunkIndex, buffer, ranges));
             }
         }
 
-        private void YieldWorker()
-        {
-            int chunkIndex = 0;
-
-            // wait for the Producer thread to parse the index file
-            while (_indices == null)
-            {
-                Thread.Sleep(10);
-            }
-
-            while (chunkIndex < _indices.Count())
-            {
-                if (_tempResults[chunkIndex] == null)
-                {
-                    // if we expect that a chunk might could be added, wait for it; otherwise increment the index and continue
-                    if (!_isProducingChunks && !_workerThreads.Any(p => p.IsAlive))
-                        chunkIndex++;
-                    else
-                        Thread.Sleep(100);
-
-                    continue;
-                }
-
-                List<AnnotationResult> chunkResults = _tempResults[chunkIndex++];
-
-                int recordCounter = 1;
-                foreach (AnnotationResult result in chunkResults)
-                {
-                    result.Variant.Id = (chunkIndex - 1)*chunkResults.Count() + recordCounter++; 
-                    _annotation.Add(result);
-                }
-            }
-
-            _annotation.CompleteAdding();
-        }
-
-        private bool VariantPredicate(Variant variant, List<ChrRange> ranges, bool isStatsLoad, bool isValidating)
+        private bool VariantPredicate(int variantIndex, Variant variant, List<ChrRange> ranges, bool isStatsLoad, bool isValidating)
         {
             if (isValidating)
                 return false;
+
+            if (_userVariantPredicate != null)
+                return _userVariantPredicate(variantIndex, variant);
 
             if (isStatsLoad)
             {
@@ -421,11 +436,35 @@ namespace Illumina.AntTools
 
                 byte[] md5One = header.Skip(8).Take(16).ToArray();
                 byte[] md5Two = header.Skip(24).Take(16).ToArray();
-
             }
 
             return annotationCollectionId;
         }
 
+        // NOTE: dumb wrapper to work around an issue in which .NET does not release memory allocated for objects removed from a BlockingCollection
+        // see: http://stackoverflow.com/questions/12824519/the-net-concurrent-blockingcollection-has-a-memory-leak
+        internal class HackWrapper<T>
+            where T : class
+        {
+            public T Item { get; set; }
+
+            public HackWrapper(T item) { Item = item; }
+        }
+
+        internal class Chunk
+        {
+            public int Id { get; set; }
+
+            public byte[] Data { get; set; }
+
+            public List<ChrRange> Ranges { get; set; }
+
+            public Chunk(int id, byte[] data, List<ChrRange> ranges)
+            {
+                Id = id;
+                Data = data;
+                Ranges = ranges;
+            }
+        }
     }
 }

@@ -31,6 +31,7 @@ namespace Illumina.AntTools
             List<ChrRange> ranges = null;
             int limit = 0;
             bool isBedOutput = false;
+            int memoryLimit = 0;
 
             OptionSet options = new OptionSet()
                 .Add("validate", dontCare => doValidate = true)
@@ -52,6 +53,10 @@ namespace Illumina.AntTools
                         throw new ArgumentException("Conflicting arguments: 'range' and 'bed' are mutually exclusive.");
 
                     ranges = ParseBed(bedPath);
+                })
+                .Add("memlimit=", memLimit =>
+                {
+                    memoryLimit = Convert.ToInt32(memLimit);
                 })
                 .Add("all", dontCare =>
                 {
@@ -82,7 +87,12 @@ namespace Illumina.AntTools
                 return;
             }
 
-            AntReader reader = new AntReader(antPath);
+            int collectionId;
+
+            AntReader reader = new AntReader(antPath, out collectionId);
+
+            if (memoryLimit > 0)
+                reader.MemoryAllocationLimitMb = memoryLimit;
 
             if (doValidate)
             {
@@ -102,36 +112,31 @@ namespace Illumina.AntTools
 
             sw.Start();
 
-            int collectionId;
             int recordCount = 0;
 
-            foreach (AnnotationResult record in reader.Load(out collectionId, ranges))
-            {
-                recordCount++;
+                foreach (AnnotationResult record in reader.Load(ranges))
+                {
+                    recordCount++;
 
-                if (!record.Annotation.Any() && !doIncludeAllResults)
-                    continue;
+                    if (!record.Annotation.Any() && !doIncludeAllResults)
+                        continue;
 
-                if (limit > 0 && recordCount >= limit)
-                    break;
+                    if (limit > 0 && recordCount >= limit)
+                        break;
 
-                string json = record.ToJson();
+                    Console.WriteLine(isBedOutput ? String.Format("{0}\t{1}\t{2}\t{3}", record.Variant.Chromosome, record.Variant.Position, record.Variant.Position, record.ToJson()) : record.ToJson());
+                }
 
-                string output = isBedOutput ? String.Format("{0}\t{1}\t{2}\t{3}", record.Variant.Chromosome, record.Variant.Position, record.Variant.Position, json) : json;
-                    
-                Console.WriteLine(output);
-            }
+            sw.Stop();
 
             if (recordCount == 0)
                 Console.WriteLine("No results.");
-
-            sw.Stop();
         }
 
         private static void PrintUsage()
         {
             Console.WriteLine("usage:");
-            Console.WriteLine("ant-tools.py antFileName [--validate] [--stats] [--range RANGE] [--bed]\n\r");
+            Console.WriteLine("ant-tools.py antFileName [--validate] [--stats] [--range=RANGE] [--bed=PATH] [--memlimit=LIMIT_IN_MB\n\r");
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
             Console.WriteLine("\n\rOptions:");
             Console.WriteLine("\t--validate: validates that the ANT file is in the correct structure.");
@@ -140,6 +145,7 @@ namespace Illumina.AntTools
             Console.WriteLine("\t--range=RANGE: allows the specification of a range over which to dump annotations, where RANGE is: CHR:START-STOP.");
             Console.WriteLine("\t--bed=PATH specifies an input BED file indicating the regions for which to export annotation.");
             Console.WriteLine("\t--bedout: specifies that the output should be BED-like in format, i.e. CHROM, START, STOP, {JSON_DATA}");
+            Console.WriteLine("\t--memlimit: specifies the maximum amount of memory (in MB) that can be allocated by ant-tools.");
         }
 
         private static List<ChrRange> ParseBed(string bedFilePath)
@@ -185,6 +191,29 @@ namespace Illumina.AntTools
                 StartPosition = Convert.ToInt64(matches.Groups[2].Value),
                 StopPosition = Convert.ToInt64(matches.Groups[3].Value)
             };
+        }
+    }
+
+    internal static class Extensiones
+    {
+        public static void WriteToStream(this AnnotationResult record, TextWriter stream)
+        {
+            foreach (var foo in record.Annotation)
+            {
+                stream.WriteLine(foo.Key);
+                
+                foreach (var bar in foo.Value)
+                {
+                    stream.WriteLine(bar.Key);
+
+                    foreach (var baz in bar.Value)
+                    {
+                        stream.WriteLine("{0}:{1}", baz.Key, baz.Value);
+                    }
+                }
+            }
+
+            stream.Flush();
         }
     }
 }
