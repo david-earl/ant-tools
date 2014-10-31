@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import io, os, sys, json
 from subprocess import Popen, PIPE
