@@ -47,6 +47,8 @@ namespace Illumina.AntTools
 
         private Func<int, Variant, bool> _userVariantPredicate;
 
+        private CancellationToken _cancellationToken;
+
         private readonly string _antPath;
         private readonly int _annotationCollectionId;
 
@@ -61,7 +63,7 @@ namespace Illumina.AntTools
         public Action<double> ProgressCallback { get; set; }
 
 
-        public AntReader(string filepath, out int annotationCollectionId)
+        public AntReader(string filepath, out int annotationCollectionId, CancellationToken cancellationToken = default (CancellationToken))
         {
             _antPath = filepath;
 
@@ -70,6 +72,8 @@ namespace Illumina.AntTools
             annotationCollectionId = _annotationCollectionId;
 
             MemoryAllocationLimitMb = 2048;
+
+            _cancellationToken = cancellationToken; 
         }
 
 
@@ -86,6 +90,9 @@ namespace Illumina.AntTools
 
             while (_chunkFinishedCount < _indices.Count() || _annotation.Any())
             {
+                if (_cancellationToken.IsCancellationRequested)
+                    yield break;
+
                 if (!_annotation.ContainsKey(recordIndex))
                 {
                     Thread.Sleep(10);
@@ -208,13 +215,13 @@ namespace Illumina.AntTools
             _chunks = new ConcurrentQueue<HackWrapper<Chunk>>();
             _annotation = new ConcurrentDictionary<int, AnnotationResult>();
 
-            Thread producerThread = new Thread(() => Producer(ranges));
+            Thread producerThread = new Thread(() => Producer(ranges, _cancellationToken));
             producerThread.Name = "ANT Producer Thread";
             producerThread.Start();
 
             for (int threadCount = 0; threadCount < _numWorkerThreads; threadCount++)
             {
-                Thread workerThread = new Thread(() => AntChunkWorker(isStats, isValidating));
+                Thread workerThread = new Thread(() => AntChunkWorker(_cancellationToken, isStats, isValidating));
 
                 workerThread.Name = String.Format("ANT_chunk_worker_{0}", threadCount + 1);
                 workerThread.IsBackground = true;
@@ -225,7 +232,7 @@ namespace Illumina.AntTools
             }
         }
 
-        private void Producer(List<ChrRange> ranges)
+        private void Producer(List<ChrRange> ranges, CancellationToken cancellationToken)
         {
             _isProducingChunks = true;
 
@@ -294,6 +301,9 @@ namespace Illumina.AntTools
                         }
                     }
 
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+
                     reader.BaseStream.Position = currentIndex.FilePosition;
 
                     List<ChrRange> chunkRanges = ranges == null ? null : ranges.Where(
@@ -318,7 +328,7 @@ namespace Illumina.AntTools
             return buffer;
         }
 
-        private void AntChunkWorker(bool isStatsLoad = false, bool isValidating = false)
+        private void AntChunkWorker(CancellationToken cancellationToken, bool isStatsLoad = false, bool isValidating = false)
         {
             while (_isProducingChunks || _chunks.Any())
             {
@@ -326,6 +336,9 @@ namespace Illumina.AntTools
                 int retryCount = 0;
 
                 HackWrapper<Chunk> chunk = null;
+
+                if (cancellationToken.IsCancellationRequested)
+                    return;
 
                 while (keepTrying)
                 {
@@ -366,6 +379,8 @@ namespace Illumina.AntTools
                         }
 
                         Interlocked.Increment(ref _chunkFinishedCount);
+
+                        break;
                     }
                     catch (Exception e)
                     {
