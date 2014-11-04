@@ -50,7 +50,7 @@ fi
 
 bin_path="$bin_dir/$EXE_NAME"
 
-xbuild /p:Configuration=Release ./AntTools/AntTools.sln
+xbuild /p:Configuration=Release /p:Platform=x64 ./AntTools/AntTools.sln
 
 # switch to the directory of the target exe, which allows us to specify *.dll, which works around a mkbundle bug
 cd AntTools/AntTools.ConsoleApp/bin/Release
