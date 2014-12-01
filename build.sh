@@ -50,12 +50,15 @@ fi
 
 bin_path="$bin_dir/$EXE_NAME"
 
-xbuild /p:Configuration=Release /p:Platform=x64 ./AntTools/AntTools.sln
+if [ $# -eq 0 ] || [ "$1" -ne '--use-existing' ]; then
+  xbuild /p:Configuration=Release /p:Platform=x64 ./AntTools/AntTools.sln
+fi
 
 # switch to the directory of the target exe, which allows us to specify *.dll, which works around a mkbundle bug
-cd AntTools/AntTools.ConsoleApp/bin/Release
+exe_path="AntTools/AntTools.ConsoleApp/bin/x64/Release"
+cd "$exe_path"
 
-mkbundle --static --deps -o "$bin_path" "$cwd/AntTools/AntTools.ConsoleApp/bin/Release/AntTools.exe" *.dll
+mkbundle --static --deps -o "$bin_path" "$cwd/$exe_path/AntTools.exe" *.dll
 
 cd -
 
