@@ -136,7 +136,6 @@ namespace Illumina.AntTools
 
         private static void PrintUsage()
         {
-            Console.WriteLine("ant-tools {0}", FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).FileVersion);
             Console.WriteLine("usage:");
             Console.WriteLine("ant-tools.py antFileName [--validate] [--stats] [--range=RANGE] [--bed=PATH] [--memlimit=LIMIT_IN_MB\n\r");
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
