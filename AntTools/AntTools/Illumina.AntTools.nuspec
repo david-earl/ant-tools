@@ -17,6 +17,6 @@
     </dependencies>
   </metadata>
   <files> 
-    <file src="bin\Release\Illumina.AntTools.dll" target="lib"/>
+    <file src="bin\x64\Release\Illumina.AntTools.dll" target="lib"/>
   </files>
 </package>
