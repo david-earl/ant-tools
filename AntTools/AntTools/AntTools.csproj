@@ -60,12 +60,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AntReader.cs" />
+    <Compile Include="AntReader\AntProducerConsumer.cs" />
+    <Compile Include="AntReader\AntReader.cs" />
+    <Compile Include="AntReader\Model\WorkChunk.cs" />
     <Compile Include="AntWriter.cs" />
     <Compile Include="BinarySerialization.cs" />
+    <Compile Include="Model\AntHeader.cs" />
     <Compile Include="Model\AntIndex.cs" />
     <Compile Include="Model\Chromosome.cs" />
     <Compile Include="Model\ChrRange.cs" />
+    <Compile Include="Model\HackWrapper.cs" />
     <Compile Include="Model\Stats.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SerializationExtensions.cs" />

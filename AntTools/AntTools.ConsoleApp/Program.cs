@@ -136,6 +136,18 @@ namespace Illumina.AntTools
 
         private static void PrintUsage()
         {
+            //var foo = GetType().Assembly.GetName();
+            var foo = typeof (AntReader).Assembly.GetName();
+            foreach (var baz in typeof (AntReader).Assembly.GetCustomAttributesData())
+            {
+                Console.WriteLine(baz);
+            }
+
+            int bar = 0;
+            //bar.
+
+            Console.WriteLine("...{0} : {1}...", foo, bar);
+
             Console.WriteLine("usage:");
             Console.WriteLine("ant-tools.py antFileName [--validate] [--stats] [--range=RANGE] [--bed=PATH] [--memlimit=LIMIT_IN_MB\n\r");
             Console.WriteLine("antFileName: the fully qualified path to the .ant file.");
