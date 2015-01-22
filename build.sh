@@ -50,7 +50,7 @@ fi
 
 bin_path="$bin_dir/$EXE_NAME"
 
-if [ $# -eq 0 ] || [ "$1" -ne '--use-existing' ]; then
+if [ $# -eq 0 ] || [ "$1" != '--use-existing' ]; then
   xbuild /p:Configuration=Release /p:Platform=x64 ./AntTools/AntTools.sln
 fi
 
