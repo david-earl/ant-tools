@@ -73,10 +73,14 @@ namespace Illumina.AntTools
 
             int recordIndex = 0;
 
-            while (!producerConsumer.IsDone)
+            while (!producerConsumer.IsDone || producerConsumer.Annotation.Any())
             {
                 if (cancellationToken.IsCancellationRequested)
+                {
+                    Console.WriteLine("Yield break.");
+                    
                     yield break;
+                }
 
                 if (!producerConsumer.Annotation.ContainsKey(recordIndex))
                 {

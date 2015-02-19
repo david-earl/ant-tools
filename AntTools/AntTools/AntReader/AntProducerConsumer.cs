@@ -154,7 +154,11 @@ namespace Illumina.AntTools
                     }
 
                     if (cancellationToken.IsCancellationRequested)
+                    {
+                        Console.WriteLine("Aborting the Producer.");
+                        
                         return;
+                    }
 
                     List<ChrRange> chunkRanges = _indices == null || ranges == null ? null : ranges.Where(
                              p => p.Chromosome.Equals(currentIndex.Chromosome) && (nextIndex == null || !p.Chromosome.Equals(nextIndex.Chromosome) || (p.StartPosition >= currentIndex.ChrPosition || p.StopPosition < nextIndex.ChrPosition))).ToList();
@@ -197,7 +201,10 @@ namespace Illumina.AntTools
                 HackWrapper<WorkChunk> chunk = null;
 
                 if (cancellationToken.IsCancellationRequested)
+                {
+                    Console.WriteLine("Aborting a Consumer.");
                     return;
+                }
 
                 while (keepTrying)
                 {
@@ -212,7 +219,10 @@ namespace Illumina.AntTools
                         }
 
                         if (cancellationToken.IsCancellationRequested)
+                        {
+                            Console.WriteLine("Aborting a Consumer.");
                             return;
+                        }
 
                         if (progressCallback != null && Thread.CurrentThread.Name.Equals("ANT_chunk_worker_1"))
                             progressCallback(1.0 - ((double) _pendingChunks.Count() / _indices.Length));
