@@ -48,7 +48,7 @@ namespace Illumina.AntTools
 
         public void Start(List<ChrRange> ranges)
         {
-            Init(ranges, null);
+            Init(ranges, (dont, even, care) => true);
         }
 
         public void Start(Func<int, Variant, bool> variantPredicate)
@@ -213,6 +213,9 @@ namespace Illumina.AntTools
                         // wait for available chunks from the producer OR throttle based on amount of allocated memory
                         if (!_pendingChunks.Any() || (GC.GetTotalMemory(false) / 1048576) > MemoryAllocationLimitMb)
                         {
+                            if (!_isProducingChunks)
+                                return;
+
                             Thread.Sleep(10);
 
                             continue;
