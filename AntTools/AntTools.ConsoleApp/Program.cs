@@ -128,9 +128,6 @@ namespace Illumina.AntTools
                 }
 
             sw.Stop();
-
-            if (recordCount == 0)
-                Console.WriteLine("No results.");
         }
 
         private static void PrintUsage()
