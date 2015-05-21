@@ -18,11 +18,11 @@ namespace Illumina.AntTools.Model
 
         public static int HeaderLength { get { return _headerLength; } }
 
-        public static int Parse(string filepath)
+        public static int Parse(string filePath)
         {
             int annotationCollectionId;
 
-            using (FileStream stream = File.Open(filepath, FileMode.Open))
+            using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
             using (BinaryReader reader = new BinaryReader(stream, Encoding.ASCII))
             {
                 // read in the header
